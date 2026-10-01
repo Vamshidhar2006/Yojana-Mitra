@@ -18,7 +18,7 @@ function SchemeDetails() {
             try {
 
                 const response = await axios.get(
-                    `http://127.0.0.1:8000/api/schemes/${id}`
+                    `http:///api/schemes/${id}`
                 );
 
                 if (response.data.error) {

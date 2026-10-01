@@ -4,18 +4,14 @@ import sys
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# Add project root to Python path
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
 from backend.rag.rag_pipeline import generate_answer
 
-
-# -----------------------------------------
-# FastAPI application
-# -----------------------------------------
 
 app = FastAPI(
     title="Yojana Mitra API",
@@ -23,10 +19,6 @@ app = FastAPI(
     version="1.0"
 )
 
-
-# -----------------------------------------
-# CORS
-# -----------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,23 +29,10 @@ app.add_middleware(
 )
 
 
-# -----------------------------------------
-# Load scheme data
-# -----------------------------------------
-
-CSV_PATH = (
-    BASE_DIR
-    / "data"
-    / "csv"
-    / "yojana_mitra_master.csv"
-)
+CSV_PATH = BASE_DIR / "data" / "csv" / "yojana_mitra_master.csv"
 
 schemes_df = pd.read_csv(CSV_PATH)
 
-
-# -----------------------------------------
-# Request models
-# -----------------------------------------
 
 class Profile(BaseModel):
     age: int
@@ -70,29 +49,19 @@ class AskRequest(BaseModel):
     language: str = "English"
 
 
-# -----------------------------------------
-# Home endpoint
-# -----------------------------------------
-
-@app.get("/")
-def home():
+@app.get("/api")
+def api_home():
     return {
         "message": "Yojana Mitra API is running"
     }
 
-
-# -----------------------------------------
-# Get schemes
-# -----------------------------------------
 
 @app.get("/api/schemes")
 def get_schemes(state: str = None):
 
     if state:
         state_schemes = schemes_df[
-            schemes_df["state"]
-            .fillna("")
-            .str.contains(
+            schemes_df["state"].fillna("").str.contains(
                 state,
                 case=False,
                 na=False
@@ -115,17 +84,11 @@ def get_schemes(state: str = None):
     }
 
 
-# -----------------------------------------
-# Get one scheme
-# -----------------------------------------
-
 @app.get("/api/schemes/{scheme_id}")
 def get_scheme_by_id(scheme_id: str):
 
     scheme = schemes_df[
-        schemes_df["scheme_id"]
-        .astype(str)
-        == str(scheme_id)
+        schemes_df["scheme_id"].astype(str) == str(scheme_id)
     ]
 
     if scheme.empty:
@@ -133,17 +96,8 @@ def get_scheme_by_id(scheme_id: str):
             "error": "Scheme not found"
         }
 
-    return (
-        scheme
-        .iloc[0]
-        .fillna("")
-        .to_dict()
-    )
+    return scheme.iloc[0].fillna("").to_dict()
 
-
-# -----------------------------------------
-# Ask Yojana Mitra
-# -----------------------------------------
 
 @app.post("/api/ask")
 def ask_yojana_mitra(request: AskRequest):
@@ -161,4 +115,44 @@ def ask_yojana_mitra(request: AskRequest):
         "question": request.question,
         "language": request.language,
         "answer": answer
+    }
+
+
+# --------------------------------------------------
+# Serve React frontend
+# --------------------------------------------------
+
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+
+
+if FRONTEND_DIST.exists():
+
+    assets_path = FRONTEND_DIST / "assets"
+
+    if assets_path.exists():
+        app.mount(
+            "/assets",
+            # StaticFiles imported here so the API still works
+            # independently of the frontend build.
+            __import__("fastapi.staticfiles", fromlist=["StaticFiles"])
+            .StaticFiles(directory=str(assets_path)),
+            name="assets"
+        )
+
+
+@app.get("/{full_path:path}")
+def serve_frontend(full_path: str):
+
+    requested_file = FRONTEND_DIST / full_path
+
+    if requested_file.exists() and requested_file.is_file():
+        return FileResponse(requested_file)
+
+    index_file = FRONTEND_DIST / "index.html"
+
+    if index_file.exists():
+        return FileResponse(index_file)
+
+    return {
+        "message": "Yojana Mitra API is running"
     }
