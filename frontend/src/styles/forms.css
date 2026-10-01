@@ -1,0 +1,160 @@
+.profile-box {
+    width: 100%;
+    max-width: 620px;
+
+    padding: 38px;
+
+    background: var(--surface);
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius-large);
+
+    box-shadow: var(--shadow);
+}
+
+.profile-box h1 {
+    margin: 5px 0 8px;
+
+    color: var(--text);
+
+    font-size: 32px;
+}
+
+.profile-box > p {
+    margin-bottom: 28px;
+
+    color: var(--text-soft);
+}
+
+.profile-box form {
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-box label {
+    margin: 17px 0 7px;
+
+    color: var(--text);
+
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.profile-box input,
+.profile-box select {
+    width: 100%;
+    height: 46px;
+
+    padding: 0 13px;
+
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+
+    background: white;
+    color: var(--text);
+
+    outline: none;
+
+    transition:
+        border-color var(--transition),
+        box-shadow var(--transition);
+}
+
+.profile-box input::placeholder {
+    color: var(--text-light);
+}
+
+.profile-box input:focus,
+.profile-box select:focus {
+    border-color: var(--primary);
+
+    box-shadow:
+        0 0 0 3px rgba(23, 107, 77, 0.1);
+}
+
+.profile-box .primary-button {
+    align-self: flex-start;
+
+    margin-top: 28px;
+}
+
+
+/* SEARCH */
+
+.search-bar {
+    display: flex;
+
+    width: 100%;
+    max-width: 720px;
+
+    margin-bottom: 38px;
+}
+
+.search-bar input {
+    flex: 1;
+
+    height: 48px;
+
+    padding: 0 16px;
+
+    border: 1px solid var(--border-dark);
+    border-right: none;
+
+    border-radius: 8px 0 0 8px;
+
+    background: white;
+
+    outline: none;
+}
+
+.search-bar input:focus {
+    border-color: var(--primary);
+}
+
+.search-bar button {
+    min-width: 100px;
+
+    border: none;
+    border-radius: 0 8px 8px 0;
+
+    background: var(--primary);
+
+    color: white;
+
+    font-weight: 600;
+}
+
+
+/* LANGUAGE SELECTOR */
+
+.language-selector {
+    position: relative;
+}
+
+.language-selector select {
+    min-width: 130px;
+    height: 42px;
+
+    padding: 0 35px 0 13px;
+
+    border: 1px solid var(--border);
+    border-radius: 8px;
+
+    background: white;
+
+    color: var(--text);
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.language-selector select:focus {
+    outline: none;
+
+    border-color: var(--primary);
+
+    box-shadow:
+        0 0 0 3px rgba(23, 107, 77, 0.1);
+}

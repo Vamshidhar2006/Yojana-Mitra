@@ -1,0 +1,251 @@
+/* TABLETS */
+
+@media (max-width: 900px) {
+
+    .navbar {
+        padding: 0 20px;
+    }
+
+    .nav-links {
+        gap: 2px;
+    }
+
+    .nav-links a {
+        padding: 8px 9px;
+        font-size: 13px;
+    }
+
+    .dashboard-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .dashboard-top {
+        align-items: flex-start;
+    }
+
+    /* INDIA MAP */
+
+    .india-map-container {
+        padding: 25px;
+    }
+
+    .india-map-header {
+        gap: 20px;
+    }
+
+    .india-map {
+        min-height: 450px;
+    }
+
+    .india-svg-map {
+        width: min(100%, 520px);
+    }
+}
+
+
+/* MOBILE */
+
+@media (max-width: 680px) {
+
+    .navbar {
+        min-height: 64px;
+
+        padding: 0 16px;
+    }
+
+    .logo {
+        font-size: 20px;
+    }
+
+    .logo::before {
+        width: 28px;
+        height: 28px;
+
+        font-size: 14px;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    /*
+       We'll replace the hidden mobile navigation
+       with a proper menu button later.
+    */
+
+    .welcome-page {
+        min-height: calc(100vh - 64px);
+
+        padding: 45px 18px;
+    }
+
+    .welcome-content h1 {
+        font-size: 39px;
+
+        letter-spacing: -0.8px;
+    }
+
+    .welcome-text {
+        font-size: 16px;
+    }
+
+    .profile-page {
+        padding: 30px 15px;
+    }
+
+    .profile-box {
+        padding: 25px 20px;
+    }
+
+    .profile-box h1 {
+        font-size: 27px;
+    }
+
+    .dashboard,
+    .explore-page,
+    .chat-page,
+    .my-schemes-page,
+    .profile-view-page,
+    .scheme-details-page {
+        padding: 30px 16px 55px;
+    }
+
+    .dashboard-top {
+        flex-direction: column;
+    }
+
+    .dashboard-top h1 {
+        font-size: 30px;
+    }
+
+    .dashboard-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-details {
+        grid-template-columns: 1fr;
+    }
+
+    .page-heading h1 {
+        font-size: 30px;
+    }
+
+    .map-placeholder {
+        min-height: 300px;
+    }
+
+    .search-bar {
+        flex-direction: column;
+    }
+
+    .search-bar input {
+        border-right: 1px solid var(--border-dark);
+
+        border-radius: 8px;
+    }
+
+    .search-bar button {
+        min-height: 44px;
+
+        margin-top: 8px;
+
+        border-radius: 8px;
+    }
+
+    .chat-box {
+        min-height: 500px;
+    }
+
+    .message {
+        max-width: 88%;
+    }
+
+    .chat-input {
+        padding: 10px;
+    }
+
+    .chat-input input {
+        min-width: 0;
+    }
+
+    .chat-input button {
+        width: 75px;
+    }
+
+    .language-selector select {
+        min-width: 125px;
+    }
+
+
+    /* INDIA MAP */
+
+    .india-map-container {
+        padding: 20px 15px;
+    }
+
+    .india-map-header {
+        flex-direction: column;
+
+        gap: 15px;
+    }
+
+    .india-map-header h2 {
+        font-size: 23px;
+    }
+
+    .selected-state {
+        width: 100%;
+    }
+
+    .india-map {
+        min-height: 350px;
+
+        padding: 10px;
+    }
+
+    .india-svg-map {
+        width: 100%;
+    }
+
+    .selected-state-results {
+        padding: 20px;
+    }
+}
+
+
+/* VERY SMALL PHONES */
+
+@media (max-width: 380px) {
+
+    .welcome-content h1 {
+        font-size: 34px;
+    }
+
+    .primary-button {
+        width: 100%;
+    }
+
+    .profile-box {
+        padding: 22px 16px;
+    }
+
+    /* INDIA MAP */
+
+    .india-map-container {
+        padding: 16px 12px;
+    }
+
+    .india-map {
+        min-height: 300px;
+
+        padding: 5px;
+    }
+
+    .india-map-header h2 {
+        font-size: 21px;
+    }
+
+    .selected-state-results {
+        padding: 16px;
+    }
+}
