@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pandas
+chromadb
+sentence-transformers
+google-genai
+python-dotenv
