@@ -153,7 +153,7 @@ for _, row in df.iterrows():
 collection.upsert(
     ids=ids,
     documents=documents,
-    embeddings=embeddings.tolist(),
+    embeddings=embeddings,
     metadatas=metadatas
 )
 

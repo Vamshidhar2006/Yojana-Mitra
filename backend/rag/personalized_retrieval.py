@@ -65,7 +65,7 @@ def personalized_search(
     # Search only among personalized candidates
     results = collection.query(
         query_embeddings=[
-            query_embedding.tolist()
+            query_embedding
         ],
         n_results=min(
             top_k,

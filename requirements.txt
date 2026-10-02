@@ -1,7 +1,6 @@
 fastapi
-uvicorn[standard]
+uvicorn
 pandas
 chromadb
-sentence-transformers
 google-genai
 python-dotenv
