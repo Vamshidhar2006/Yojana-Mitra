@@ -9,6 +9,11 @@ function SchemeDetails() {
     const [scheme, setScheme] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const apiBaseUrl =
+        window.location.hostname === "localhost"
+            ? "http://127.0.0.1:8000"
+            : "";
+
     useEffect(() => {
 
         async function loadScheme() {
@@ -16,7 +21,7 @@ function SchemeDetails() {
             try {
 
                 const response = await axios.get(
-                    `/api/schemes/${id}`
+                    `${apiBaseUrl}/api/schemes/${id}`
                 );
 
                 if (response.data.error) {
@@ -46,7 +51,6 @@ function SchemeDetails() {
 
     }, [id]);
 
-
     if (loading) {
 
         return (
@@ -64,7 +68,6 @@ function SchemeDetails() {
         );
 
     }
-
 
     if (!scheme) {
 
@@ -95,7 +98,6 @@ function SchemeDetails() {
 
     }
 
-
     return (
 
         <div className="scheme-details-page">
@@ -122,7 +124,6 @@ function SchemeDetails() {
                     {scheme.category || "Government Scheme"}
                 </p>
 
-
                 <h3>
                     Benefits
                 </h3>
@@ -131,7 +132,6 @@ function SchemeDetails() {
                     {scheme.benefits ||
                         "Information not available."}
                 </p>
-
 
                 <h3>
                     Eligibility
@@ -142,7 +142,6 @@ function SchemeDetails() {
                         "Eligibility information not available."}
                 </p>
 
-
                 <h3>
                     Required Documents
                 </h3>
@@ -152,7 +151,6 @@ function SchemeDetails() {
                         "Information not available."}
                 </p>
 
-
                 <h3>
                     Application Process
                 </h3>
@@ -161,7 +159,6 @@ function SchemeDetails() {
                     {scheme.application_process ||
                         "Application process information not available."}
                 </p>
-
 
                 {scheme.official_source_url && (
 
