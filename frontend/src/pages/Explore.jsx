@@ -12,6 +12,10 @@ function Explore() {
     const [featuredSchemes, setFeaturedSchemes] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    const apiBaseUrl =
+        window.location.hostname === "localhost"
+            ? "http://127.0.0.1:8000"
+            : "";
 
     // Load a few schemes when Explore page opens
     useEffect(() => {
@@ -21,7 +25,7 @@ function Explore() {
             try {
 
                 const response = await axios.get(
-                    "/api/schemes"
+                    `${apiBaseUrl}/api/schemes`
                 );
 
                 setFeaturedSchemes(
@@ -43,7 +47,6 @@ function Explore() {
 
     }, []);
 
-
     function handleSearch(searchText) {
 
         console.log(
@@ -53,7 +56,6 @@ function Explore() {
 
     }
 
-
     async function handleStateSelect(stateName) {
 
         setSelectedState(stateName);
@@ -62,7 +64,7 @@ function Explore() {
         try {
 
             const response = await axios.get(
-                "/api/schemes",
+                `${apiBaseUrl}/api/schemes`,
                 {
                     params: {
                         state: stateName
@@ -91,7 +93,6 @@ function Explore() {
 
     }
 
-
     return (
 
         <div className="explore-page">
@@ -113,16 +114,13 @@ function Explore() {
 
             </div>
 
-
             <SearchBar
                 onSearch={handleSearch}
             />
 
-
             <IndiaMap
                 onStateSelect={handleStateSelect}
             />
-
 
             {/* Featured schemes */}
 
@@ -148,7 +146,6 @@ function Explore() {
 
                         </div>
 
-
                         <div className="scheme-grid">
 
                             {featuredSchemes.map(
@@ -167,7 +164,6 @@ function Explore() {
                     </div>
 
                 )}
-
 
             {/* Selected state */}
 
@@ -204,7 +200,6 @@ function Explore() {
 
             )}
 
-
             {/* State schemes */}
 
             {selectedState &&
@@ -224,7 +219,6 @@ function Explore() {
                             </h2>
 
                         </div>
-
 
                         <div className="scheme-grid">
 

@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-# Add project root to Python path
 BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(BASE_DIR))
 
@@ -16,23 +15,13 @@ def generate_answer(
     language="English",
     top_k=3
 ):
-
-    # -----------------------------------------
-    # Personalized retrieval
-    # -----------------------------------------
-
     results = personalized_search(
         user_profile,
         question,
         top_k=top_k
     )
 
-    # -----------------------------------------
-    # No results found
-    # -----------------------------------------
-
     if not results["documents"][0]:
-
         if language == "English":
             return (
                 "I couldn't find any relevant government "
@@ -44,15 +33,9 @@ def generate_answer(
             "schemes for your question in the available information."
         )
 
-    # -----------------------------------------
-    # Build compact retrieved context
-    # -----------------------------------------
-
     context_parts = []
 
-    for i, document in enumerate(
-        results["documents"][0]
-    ):
+    for i, document in enumerate(results["documents"][0]):
 
         metadata = results["metadatas"][0][i]
 
@@ -76,8 +59,6 @@ def generate_answer(
             ""
         )
 
-        # Keep the retrieved document reasonably small.
-        # This reduces Gemini processing time.
         document = str(document)[:5000]
 
         context = f"""
@@ -94,10 +75,6 @@ Information:
         context_parts.append(context)
 
     context = "\n".join(context_parts)
-
-    # -----------------------------------------
-    # Compact Gemini prompt
-    # -----------------------------------------
 
     prompt = f"""
 You are Yojana Mitra, a helpful government scheme assistant.
@@ -151,11 +128,6 @@ Do not give a generic list if the user asked about
 a specific scheme.
 """
 
-
-    # -----------------------------------------
-    # Fast Gemini generation
-    # -----------------------------------------
-
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -168,10 +140,6 @@ a specific scheme.
     return response.text
 
 
-# -----------------------------------------
-# Direct testing
-# -----------------------------------------
-
 if __name__ == "__main__":
 
     user_profile = {
@@ -183,9 +151,7 @@ if __name__ == "__main__":
         "social_category": "General"
     }
 
-    question = (
-        "What scholarship schemes can I apply for?"
-    )
+    question = "What scholarship schemes can I apply for?"
 
     print("\nGenerating Yojana Mitra response...")
     print("=" * 70)
@@ -193,7 +159,7 @@ if __name__ == "__main__":
     answer = generate_answer(
         user_profile=user_profile,
         question=question,
-        language="Telugu",
+        language="English",
         top_k=3
     )
 

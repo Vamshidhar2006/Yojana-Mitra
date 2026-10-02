@@ -11,6 +11,11 @@ function Dashboard() {
     const [schemes, setSchemes] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const apiBaseUrl =
+        window.location.hostname === "localhost"
+            ? "http://127.0.0.1:8000"
+            : "";
+
     useEffect(() => {
 
         // Get profile if the user has already created one
@@ -35,14 +40,13 @@ function Dashboard() {
             }
         }
 
-
         // Load public schemes
         async function loadSchemes() {
 
             try {
 
                 const response = await axios.get(
-                    "/api/schemes"
+                    `${apiBaseUrl}/api/schemes`
                 );
 
                 setSchemes(
@@ -66,7 +70,6 @@ function Dashboard() {
         loadSchemes();
 
     }, []);
-
 
     return (
 
@@ -94,7 +97,6 @@ function Dashboard() {
                 </div>
 
             </div>
-
 
             {profile ? (
 
@@ -135,7 +137,6 @@ function Dashboard() {
 
             )}
 
-
             <div className="dashboard-cards">
 
                 <Link
@@ -158,7 +159,6 @@ function Dashboard() {
 
                 </Link>
 
-
                 <Link
                     to="/chat"
                     className="dashboard-card"
@@ -178,7 +178,6 @@ function Dashboard() {
                     </p>
 
                 </Link>
-
 
                 <Link
                     to="/my-schemes"
@@ -202,7 +201,6 @@ function Dashboard() {
 
             </div>
 
-
             <div className="scheme-section">
 
                 <div className="section-heading">
@@ -222,7 +220,6 @@ function Dashboard() {
 
                 </div>
 
-
                 {loading && (
 
                     <p>
@@ -230,7 +227,6 @@ function Dashboard() {
                     </p>
 
                 )}
-
 
                 {!loading &&
                     schemes.length === 0 && (
@@ -241,7 +237,6 @@ function Dashboard() {
                         </p>
 
                     )}
-
 
                 {!loading &&
                     schemes.length > 0 && (
@@ -264,7 +259,6 @@ function Dashboard() {
                     )}
 
             </div>
-
 
             <div className="map-preview">
 

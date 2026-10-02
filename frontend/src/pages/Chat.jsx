@@ -68,8 +68,16 @@ function Chat() {
                 JSON.parse(savedProfile);
 
 
+            // Local backend uses port 8000.
+            // Render uses the same host, so no separate URL is needed there.
+            const apiBaseUrl =
+                window.location.hostname === "localhost"
+                    ? "http://127.0.0.1:8000"
+                    : "";
+
+
             const response = await axios.post(
-                "/api/ask",
+                `${apiBaseUrl}/api/ask`,
                 {
                     profile: profile,
                     question: userQuestion,
