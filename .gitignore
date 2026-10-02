@@ -1,0 +1,4 @@
+data/chroma/
+api/.env
+__pycache__/
+*.pyc
