@@ -101,48 +101,17 @@ def get_scheme_by_id(scheme_id: str):
 @app.post("/api/ask")
 def ask_yojana_mitra(request: AskRequest):
 
-    print("ASK REQUEST RECEIVED")
-
-    profile = request.profile.model_dump()
-
-    print("PROFILE:", profile)
+    print("========== CHAT REQUEST RECEIVED ==========")
+    print("PROFILE:", request.profile.model_dump())
     print("QUESTION:", request.question)
     print("LANGUAGE:", request.language)
+    print("===========================================")
 
-    try:
-
-        print("Loading RAG module...")
-
-        from backend.rag.rag_pipeline import generate_answer
-
-        print("RAG MODULE LOADED")
-
-        answer = generate_answer(
-            user_profile=profile,
-            question=request.question,
-            language=request.language,
-            top_k=3
-        )
-
-        print("ANSWER GENERATED")
-
-        return {
-            "question": request.question,
-            "language": request.language,
-            "answer": answer
-        }
-
-    except Exception as e:
-
-        import traceback
-
-        print("RAG ERROR:", repr(e))
-        traceback.print_exc()
-
-        return {
-            "error": str(e),
-            "type": type(e).__name__
-        }
+    return {
+        "question": request.question,
+        "language": request.language,
+        "answer": "Test response from Yojana Mitra backend."
+    }
 
 
 # --------------------------------------------------
