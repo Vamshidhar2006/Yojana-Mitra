@@ -10,8 +10,6 @@ from pydantic import BaseModel
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
-from backend.rag.rag_pipeline import generate_answer
-
 
 app = FastAPI(
     title="Yojana Mitra API",
@@ -102,6 +100,11 @@ def get_scheme_by_id(scheme_id: str):
 @app.post("/api/ask")
 def ask_yojana_mitra(request: AskRequest):
 
+    # Load the RAG system only when a user asks a question.
+    # This prevents the embedding model from loading during
+    # FastAPI startup.
+    from backend.rag.rag_pipeline import generate_answer
+
     profile = request.profile.model_dump()
 
     answer = generate_answer(
@@ -130,12 +133,11 @@ if FRONTEND_DIST.exists():
     assets_path = FRONTEND_DIST / "assets"
 
     if assets_path.exists():
+        from fastapi.staticfiles import StaticFiles
+
         app.mount(
             "/assets",
-            # StaticFiles imported here so the API still works
-            # independently of the frontend build.
-            __import__("fastapi.staticfiles", fromlist=["StaticFiles"])
-            .StaticFiles(directory=str(assets_path)),
+            StaticFiles(directory=str(assets_path)),
             name="assets"
         )
 
