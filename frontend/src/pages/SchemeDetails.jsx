@@ -8,8 +8,6 @@ function SchemeDetails() {
 
     const [scheme, setScheme] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-
 
     useEffect(() => {
 
@@ -18,17 +16,13 @@ function SchemeDetails() {
             try {
 
                 const response = await axios.get(
-                    `http:///api/schemes/${id}`
+                    `/api/schemes/${id}`
                 );
 
                 if (response.data.error) {
-
-                    setError("Scheme not found.");
-
+                    setScheme(null);
                 } else {
-
                     setScheme(response.data);
-
                 }
 
             } catch (error) {
@@ -38,15 +32,14 @@ function SchemeDetails() {
                     error
                 );
 
-                setError(
-                    "Unable to load scheme details."
-                );
+                setScheme(null);
 
             } finally {
 
                 setLoading(false);
 
             }
+
         }
 
         loadScheme();
@@ -64,7 +57,7 @@ function SchemeDetails() {
                 </p>
 
                 <h1>
-                    Loading scheme...
+                    Loading...
                 </h1>
 
             </div>
@@ -73,7 +66,7 @@ function SchemeDetails() {
     }
 
 
-    if (error || !scheme) {
+    if (!scheme) {
 
         return (
             <div className="scheme-details-page">
@@ -87,12 +80,12 @@ function SchemeDetails() {
                 </h1>
 
                 <p>
-                    {error}
+                    Unable to load scheme details.
                 </p>
 
                 <Link
                     to="/explore"
-                    className="primary-button"
+                    className="view-button"
                 >
                     Back to Explore
                 </Link>
@@ -104,204 +97,91 @@ function SchemeDetails() {
 
 
     return (
+
         <div className="scheme-details-page">
 
             <p className="small-title">
                 SCHEME DETAILS
             </p>
 
-
             <h1>
                 {scheme.scheme_name}
             </h1>
 
-
-            <p>
+            <p className="scheme-state">
                 {scheme.state || "All India"}
             </p>
 
+            <div className="scheme-detail-card">
 
-            <div className="details-section">
-
-                <h2>
-                    About the Scheme
-                </h2>
-
-                <p>
-                    {scheme.description ||
-                        scheme.document ||
-                        "Information about this scheme is not available."}
-                </p>
-
-            </div>
-
-
-            <div className="details-section">
-
-                <h2>
-                    Eligibility
-                </h2>
+                <h3>
+                    Category
+                </h3>
 
                 <p>
-                    {scheme.eligibility ||
-                        "Eligibility information is not available."}
+                    {scheme.category || "Government Scheme"}
                 </p>
 
-            </div>
 
-
-            <div className="details-section">
-
-                <h2>
+                <h3>
                     Benefits
-                </h2>
+                </h3>
 
                 <p>
                     {scheme.benefits ||
-                        "Benefit information is not available."}
+                        "Information not available."}
                 </p>
 
-            </div>
+
+                <h3>
+                    Eligibility
+                </h3>
+
+                <p>
+                    {scheme.eligibility ||
+                        "Eligibility information not available."}
+                </p>
 
 
-            <div className="details-section">
-
-                <h2>
+                <h3>
                     Required Documents
-                </h2>
+                </h3>
 
                 <p>
                     {scheme.required_documents ||
-                        "Required document information is not available."}
+                        "Information not available."}
                 </p>
 
-            </div>
 
-
-            <div className="details-section">
-
-                <h2>
+                <h3>
                     Application Process
-                </h2>
+                </h3>
 
                 <p>
                     {scheme.application_process ||
-                        "Application process information is not available."}
+                        "Application process information not available."}
                 </p>
-
-            </div>
-
-
-            <div className="details-section">
-
-                <h2>
-                    Scheme Information
-                </h2>
-
-                <p>
-                    <strong>Category:</strong>{" "}
-                    {scheme.category || "Not specified"}
-                </p>
-
-                <p>
-                    <strong>Occupation:</strong>{" "}
-                    {scheme.occupation || "Not specified"}
-                </p>
-
-                <p>
-                    <strong>Gender:</strong>{" "}
-                    {scheme.gender || "Not specified"}
-                </p>
-
-                <p>
-                    <strong>Age:</strong>{" "}
-                    {scheme.min_age || "Not specified"}
-                    {" - "}
-                    {scheme.max_age || "Not specified"}
-                </p>
-
-                <p>
-                    <strong>Income Limit:</strong>{" "}
-                    {scheme.income_limit || "Not specified"}
-                </p>
-
-                <p>
-                    <strong>Social Category:</strong>{" "}
-                    {scheme.social_category || "Not specified"}
-                </p>
-
-            </div>
-
-
-            <div className="details-section">
-
-                <h2>
-                    Official Information
-                </h2>
-
-
-                {scheme.application_url && (
-
-                    <p>
-                        <strong>
-                            Application:
-                        </strong>{" "}
-
-                        <a
-                            href={scheme.application_url}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            Apply for this scheme
-                        </a>
-                    </p>
-
-                )}
 
 
                 {scheme.official_source_url && (
 
-                    <p>
-                        <strong>
-                            Official Source:
-                        </strong>{" "}
-
-                        <a
-                            href={scheme.official_source_url}
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            View Official Source
-                        </a>
-                    </p>
-
-                )}
-
-
-                {scheme.last_verified_date && (
-
-                    <p>
-                        <strong>
-                            Last Verified:
-                        </strong>{" "}
-                        {scheme.last_verified_date}
-                    </p>
+                    <a
+                        href={scheme.official_source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="view-button"
+                    >
+                        Official Source
+                    </a>
 
                 )}
 
             </div>
 
-
-            <Link
-                to="/explore"
-                className="primary-button"
-            >
-                Back to Explore
-            </Link>
-
         </div>
-    );
-}
 
+    );
+
+}
 
 export default SchemeDetails;
