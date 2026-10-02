@@ -121,7 +121,7 @@ def ask_yojana_mitra(request: AskRequest):
             user_profile=profile,
             question=request.question,
             language=request.language,
-            top_k=5
+            top_k=3
         )
 
         print("ANSWER GENERATED")
