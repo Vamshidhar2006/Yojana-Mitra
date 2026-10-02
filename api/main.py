@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
@@ -100,25 +101,48 @@ def get_scheme_by_id(scheme_id: str):
 @app.post("/api/ask")
 def ask_yojana_mitra(request: AskRequest):
 
-    # Load the RAG system only when a user asks a question.
-    # This prevents the embedding model from loading during
-    # FastAPI startup.
-    from backend.rag.rag_pipeline import generate_answer
+    print("ASK REQUEST RECEIVED")
 
     profile = request.profile.model_dump()
 
-    answer = generate_answer(
-        user_profile=profile,
-        question=request.question,
-        language=request.language,
-        top_k=5
-    )
+    print("PROFILE:", profile)
+    print("QUESTION:", request.question)
+    print("LANGUAGE:", request.language)
 
-    return {
-        "question": request.question,
-        "language": request.language,
-        "answer": answer
-    }
+    try:
+
+        print("Loading RAG module...")
+
+        from backend.rag.rag_pipeline import generate_answer
+
+        print("RAG MODULE LOADED")
+
+        answer = generate_answer(
+            user_profile=profile,
+            question=request.question,
+            language=request.language,
+            top_k=5
+        )
+
+        print("ANSWER GENERATED")
+
+        return {
+            "question": request.question,
+            "language": request.language,
+            "answer": answer
+        }
+
+    except Exception as e:
+
+        import traceback
+
+        print("RAG ERROR:", repr(e))
+        traceback.print_exc()
+
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
 
 
 # --------------------------------------------------
@@ -133,6 +157,7 @@ if FRONTEND_DIST.exists():
     assets_path = FRONTEND_DIST / "assets"
 
     if assets_path.exists():
+
         from fastapi.staticfiles import StaticFiles
 
         app.mount(
