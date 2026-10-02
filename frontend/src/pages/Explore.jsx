@@ -21,7 +21,7 @@ function Explore() {
             try {
 
                 const response = await axios.get(
-                    "http:///api/schemes"
+                    "/api/schemes"
                 );
 
                 setFeaturedSchemes(
@@ -36,6 +36,7 @@ function Explore() {
                 );
 
             }
+
         }
 
         loadFeaturedSchemes();
@@ -61,7 +62,7 @@ function Explore() {
         try {
 
             const response = await axios.get(
-                "http:///api/schemes",
+                "/api/schemes",
                 {
                     params: {
                         state: stateName
@@ -87,10 +88,12 @@ function Explore() {
             setLoading(false);
 
         }
+
     }
 
 
     return (
+
         <div className="explore-page">
 
             <div className="page-heading">
@@ -126,43 +129,44 @@ function Explore() {
             {!selectedState &&
                 featuredSchemes.length > 0 && (
 
-                <div className="scheme-section">
+                    <div className="scheme-section">
 
-                    <div className="section-heading">
+                        <div className="section-heading">
 
-                        <p className="small-title">
-                            EXPLORE
-                        </p>
+                            <p className="small-title">
+                                EXPLORE
+                            </p>
 
-                        <h2>
-                            Government Schemes
-                        </h2>
+                            <h2>
+                                Government Schemes
+                            </h2>
 
-                        <p>
-                            Browse a few schemes from
-                            our collection.
-                        </p>
+                            <p>
+                                Browse a few schemes from
+                                our collection.
+                            </p>
+
+                        </div>
+
+
+                        <div className="scheme-grid">
+
+                            {featuredSchemes.map(
+                                (scheme) => (
+
+                                    <SchemeCard
+                                        key={scheme.scheme_id}
+                                        scheme={scheme}
+                                    />
+
+                                )
+                            )}
+
+                        </div>
 
                     </div>
 
-
-                    <div className="scheme-grid">
-
-                        {featuredSchemes.map(
-                            (scheme) => (
-
-                            <SchemeCard
-                                key={scheme.scheme_id}
-                                scheme={scheme}
-                            />
-
-                        ))}
-
-                    </div>
-
-                </div>
-
-            )}
+                )}
 
 
             {/* Selected state */}
@@ -180,17 +184,21 @@ function Explore() {
                     </h2>
 
                     {loading && (
+
                         <p>
                             Loading schemes...
                         </p>
+
                     )}
 
                     {!loading &&
                         schemes.length === 0 && (
-                        <p>
-                            No schemes found for this state.
-                        </p>
-                    )}
+
+                            <p>
+                                No schemes found for this state.
+                            </p>
+
+                        )}
 
                 </div>
 
@@ -203,41 +211,44 @@ function Explore() {
                 !loading &&
                 schemes.length > 0 && (
 
-                <div className="scheme-section">
+                    <div className="scheme-section">
 
-                    <div className="section-heading">
+                        <div className="section-heading">
 
-                        <p className="small-title">
-                            AVAILABLE SCHEMES
-                        </p>
+                            <p className="small-title">
+                                AVAILABLE SCHEMES
+                            </p>
 
-                        <h2>
-                            Schemes in {selectedState}
-                        </h2>
+                            <h2>
+                                Schemes in {selectedState}
+                            </h2>
+
+                        </div>
+
+
+                        <div className="scheme-grid">
+
+                            {schemes.map(
+                                (scheme) => (
+
+                                    <SchemeCard
+                                        key={scheme.scheme_id}
+                                        scheme={scheme}
+                                    />
+
+                                )
+                            )}
+
+                        </div>
 
                     </div>
 
-
-                    <div className="scheme-grid">
-
-                        {schemes.map(
-                            (scheme) => (
-
-                            <SchemeCard
-                                key={scheme.scheme_id}
-                                scheme={scheme}
-                            />
-
-                        ))}
-
-                    </div>
-
-                </div>
-
-            )}
+                )}
 
         </div>
+
     );
+
 }
 
 export default Explore;

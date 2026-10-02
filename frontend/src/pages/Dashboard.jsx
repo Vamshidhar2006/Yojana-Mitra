@@ -18,15 +18,23 @@ function Dashboard() {
             localStorage.getItem("yojanaProfile");
 
         if (savedProfile) {
+
             try {
-                setProfile(JSON.parse(savedProfile));
+
+                setProfile(
+                    JSON.parse(savedProfile)
+                );
+
             } catch (error) {
+
                 console.error(
                     "Error reading profile:",
                     error
                 );
+
             }
         }
+
 
         // Load public schemes
         async function loadSchemes() {
@@ -34,7 +42,7 @@ function Dashboard() {
             try {
 
                 const response = await axios.get(
-                    "http:///api/schemes"
+                    "/api/schemes"
                 );
 
                 setSchemes(
@@ -59,7 +67,9 @@ function Dashboard() {
 
     }, []);
 
+
     return (
+
         <div className="dashboard">
 
             <div className="dashboard-top">
@@ -214,9 +224,11 @@ function Dashboard() {
 
 
                 {loading && (
+
                     <p>
                         Loading schemes...
                     </p>
+
                 )}
 
 
@@ -276,7 +288,9 @@ function Dashboard() {
             </div>
 
         </div>
+
     );
+
 }
 
 export default Dashboard;
