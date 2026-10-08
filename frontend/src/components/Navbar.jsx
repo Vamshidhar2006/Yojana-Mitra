@@ -56,6 +56,13 @@ function Navbar() {
                 </Link>
 
                 <Link
+                    to="/yojana-lm-chat"
+                    onClick={closeMenu}
+                >
+                    Ask YojanaLM
+                </Link>
+
+                <Link
                     to="/my-schemes"
                     onClick={closeMenu}
                 >

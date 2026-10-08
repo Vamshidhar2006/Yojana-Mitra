@@ -10,6 +10,7 @@ import Chat from "./pages/Chat";
 import MySchemes from "./pages/MySchemes";
 import SchemeDetails from "./pages/SchemeDetails";
 import Profile from "./pages/Profile";
+import YojanaLMChat from "./pages/YojanaLMChat";
 
 function App() {
     return (
@@ -39,9 +40,16 @@ function App() {
                     element={<Explore />}
                 />
 
+                {/* Existing Gemini/RAG chatbot */}
                 <Route
                     path="/chat"
                     element={<Chat />}
+                />
+
+                {/* New YojanaLM chatbot */}
+                <Route
+                    path="/yojana-lm-chat"
+                    element={<YojanaLMChat />}
                 />
 
                 <Route

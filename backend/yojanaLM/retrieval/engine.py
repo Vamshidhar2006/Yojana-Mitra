@@ -1893,7 +1893,7 @@ def yojana_query_v32(
         # EXACT SCHEME FIELD
         # ====================================================
 
-        if field is not None:
+        if field is not None and intent != "eligibility":
 
             value = exact_scheme.get(
                 field,

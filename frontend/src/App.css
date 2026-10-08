@@ -436,3 +436,660 @@ img {
         width: 100%;
     }
 }
+/* =========================================================
+   YOJANA LM CHAT PAGE
+   Gemini-style Yojana Mitra layout
+   ========================================================= */
+
+.yojanalm-page {
+  min-height: calc(100vh - 72px);
+  background: #f5f8f6;
+  padding: 42px 24px 60px;
+  box-sizing: border-box;
+}
+
+.yojanalm-container {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+
+/* =========================================================
+   PAGE HEADING
+   ========================================================= */
+
+.yojanalm-heading {
+  margin-bottom: 30px;
+}
+
+.yojanalm-eyebrow {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+  color: #117a5a;
+  margin-bottom: 14px;
+}
+
+.yojanalm-heading h1 {
+  margin: 0;
+  color: #132b43;
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 750;
+}
+
+.yojanalm-heading p {
+  margin: 14px 0 0;
+  color: #607789;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   CHAT CARD
+   ========================================================= */
+
+.yojanalm-chat-card {
+  width: 100%;
+  height: 650px;
+
+  background: #ffffff;
+
+  border: 1px solid #dce8e2;
+  border-radius: 20px;
+
+  box-shadow:
+    0 4px 18px rgba(21, 70, 54, 0.06);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   TOP BAR
+   ========================================================= */
+
+.yojanalm-topbar {
+  min-height: 74px;
+
+  padding: 14px 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid #edf2ef;
+
+  box-sizing: border-box;
+}
+
+.yojanalm-model-info {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.yojanalm-model-dot {
+  width: 10px;
+  height: 10px;
+
+  border-radius: 50%;
+
+  background: #16805d;
+
+  box-shadow: 0 0 0 5px #e8f5ef;
+}
+
+.yojanalm-model-name {
+  color: #19384a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.yojanalm-model-status {
+  margin-top: 2px;
+
+  color: #8a9995;
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   LANGUAGE SELECTOR
+   ========================================================= */
+
+.yojanalm-language {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.yojanalm-language label {
+  color: #71817d;
+  font-size: 13px;
+}
+
+.yojanalm-language select {
+  height: 38px;
+
+  padding: 0 35px 0 14px;
+
+  border: 1px solid #cfe0d8;
+  border-radius: 20px;
+
+  background: #f9fcfa;
+
+  color: #176b52;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  outline: none;
+
+  cursor: pointer;
+}
+
+.yojanalm-language select:focus {
+  border-color: #17805d;
+  box-shadow: 0 0 0 3px rgba(23, 128, 93, 0.08);
+}
+
+
+/* =========================================================
+   MESSAGE AREA
+   ========================================================= */
+
+.yojanalm-messages {
+  flex: 1;
+
+  overflow-y: auto;
+
+  padding: 30px 30px 20px;
+
+  box-sizing: border-box;
+
+  scroll-behavior: smooth;
+}
+
+.yojanalm-messages::-webkit-scrollbar {
+  width: 7px;
+}
+
+.yojanalm-messages::-webkit-scrollbar-thumb {
+  background: #d5e2dc;
+  border-radius: 10px;
+}
+
+.yojanalm-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.yojanalm-empty {
+  min-height: 100%;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  padding: 30px;
+  box-sizing: border-box;
+}
+
+.yojanalm-empty-icon {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 14px;
+
+  background: #eaf6f0;
+  color: #16775a;
+
+  font-size: 22px;
+
+  margin-bottom: 18px;
+}
+
+.yojanalm-empty h2 {
+  margin: 0;
+
+  color: #18334a;
+
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.yojanalm-empty p {
+  margin: 12px 0 0;
+
+  color: #71848d;
+
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.yojanalm-profile-note {
+  margin-top: 7px;
+
+  color: #71848d;
+
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   SUGGESTION BUTTONS
+   ========================================================= */
+
+.yojanalm-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+
+  justify-content: center;
+
+  gap: 10px;
+
+  margin-top: 26px;
+}
+
+.yojanalm-suggestions button {
+  border: 1px solid #d7e6df;
+
+  background: #ffffff;
+
+  color: #176d54;
+
+  padding: 10px 15px;
+
+  border-radius: 20px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.yojanalm-suggestions button:hover {
+  background: #f1f9f5;
+  border-color: #a9cdbc;
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   CONVERSATION
+   ========================================================= */
+
+.yojanalm-conversation {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 22px;
+}
+
+.yojanalm-message-row {
+  width: 100%;
+
+  display: flex;
+  align-items: flex-start;
+
+  gap: 10px;
+}
+
+.user-row {
+  justify-content: flex-end;
+}
+
+.assistant-row {
+  justify-content: flex-start;
+}
+
+
+/* =========================================================
+   AVATAR
+   ========================================================= */
+
+.yojanalm-avatar {
+  flex: 0 0 auto;
+
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 11px;
+
+  background: #eaf6f0;
+
+  color: #17785a;
+
+  font-size: 15px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   MESSAGE BUBBLES
+   ========================================================= */
+
+.yojanalm-message {
+  max-width: 76%;
+
+  padding: 13px 16px;
+
+  border-radius: 16px;
+
+  font-size: 14px;
+
+  line-height: 1.65;
+
+  white-space: normal;
+
+  word-break: break-word;
+}
+
+.user-message {
+  background: #147857;
+
+  color: #ffffff;
+
+  border-bottom-right-radius: 5px;
+}
+
+.assistant-message {
+  background: #f4f8f6;
+
+  color: #304955;
+
+  border: 1px solid #e3ece7;
+
+  border-bottom-left-radius: 5px;
+}
+
+.error-message {
+  background: #fff6f5;
+  border-color: #f1d3cf;
+  color: #a0443a;
+}
+
+
+/* =========================================================
+   LOADING DOTS
+   ========================================================= */
+
+.loading-message {
+  min-width: 55px;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.loading-message span {
+  width: 6px;
+  height: 6px;
+
+  background: #7d958c;
+
+  border-radius: 50%;
+
+  animation: yojanaLM-bounce 1.2s infinite ease-in-out;
+}
+
+.loading-message span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loading-message span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes yojanaLM-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+
+/* =========================================================
+   INPUT SECTION
+   ========================================================= */
+
+.yojanalm-input-section {
+  padding: 16px 20px 14px;
+
+  border-top: 1px solid #edf2ef;
+
+  background: #ffffff;
+}
+
+.yojanalm-input-wrapper {
+  display: flex;
+  align-items: flex-end;
+
+  gap: 10px;
+}
+
+.yojanalm-input-wrapper textarea {
+  flex: 1;
+
+  min-height: 48px;
+  max-height: 130px;
+
+  resize: none;
+
+  padding: 13px 15px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #cfdfd8;
+
+  border-radius: 13px;
+
+  background: #ffffff;
+
+  color: #263f4e;
+
+  font-family: inherit;
+
+  font-size: 14px;
+
+  line-height: 1.5;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.yojanalm-input-wrapper textarea::placeholder {
+  color: #91a09c;
+}
+
+.yojanalm-input-wrapper textarea:focus {
+  border-color: #218264;
+
+  box-shadow:
+    0 0 0 3px rgba(33, 130, 100, 0.08);
+}
+
+
+/* =========================================================
+   SEND BUTTON
+   ========================================================= */
+
+.yojanalm-send-button {
+  height: 48px;
+
+  min-width: 78px;
+
+  padding: 0 18px;
+
+  border: none;
+
+  border-radius: 11px;
+
+  background: #147857;
+
+  color: #ffffff;
+
+  font-family: inherit;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.yojanalm-send-button:hover:not(:disabled) {
+  background: #106b4e;
+  transform: translateY(-1px);
+}
+
+.yojanalm-send-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
+/* =========================================================
+   INPUT HINT
+   ========================================================= */
+
+.yojanalm-input-hint {
+  margin-top: 7px;
+
+  padding-left: 3px;
+
+  color: #9aa7a3;
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .yojanalm-page {
+    padding: 30px 18px 45px;
+  }
+
+  .yojanalm-heading h1 {
+    font-size: 34px;
+  }
+
+  .yojanalm-chat-card {
+    height: 650px;
+  }
+}
+
+
+@media (max-width: 650px) {
+  .yojanalm-page {
+    padding: 24px 12px 35px;
+  }
+
+  .yojanalm-heading {
+    margin-bottom: 20px;
+  }
+
+  .yojanalm-eyebrow {
+    font-size: 11px;
+  }
+
+  .yojanalm-heading h1 {
+    font-size: 29px;
+  }
+
+  .yojanalm-heading p {
+    font-size: 14px;
+  }
+
+  .yojanalm-chat-card {
+    height: calc(100vh - 210px);
+    min-height: 560px;
+
+    border-radius: 16px;
+  }
+
+  .yojanalm-topbar {
+    padding: 12px 14px;
+  }
+
+  .yojanalm-language label {
+    display: none;
+  }
+
+  .yojanalm-messages {
+    padding: 20px 14px;
+  }
+
+  .yojanalm-message {
+    max-width: 86%;
+  }
+
+  .yojanalm-input-section {
+    padding: 12px;
+  }
+
+  .yojanalm-input-wrapper {
+    gap: 7px;
+  }
+
+  .yojanalm-send-button {
+    min-width: 65px;
+    padding: 0 13px;
+  }
+
+  .yojanalm-suggestions {
+    flex-direction: column;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .yojanalm-suggestions button {
+    width: 100%;
+  }
+}
