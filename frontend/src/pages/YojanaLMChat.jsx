@@ -1,4 +1,6 @@
+
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import "../App.css";
 
 const API_URL = "http://127.0.0.1:8000/api/ask-yojanalm";
@@ -9,22 +11,62 @@ function YojanaLM() {
   const [language, setLanguage] = useState("English");
   const [loading, setLoading] = useState(false);
 
-  // Keep the same profile structure used by your backend.
-  // If your application already stores the profile elsewhere,
-  // you can replace this with that profile source.
-  const profile = {
-    age: 21,
-    state: "Andhra Pradesh",
-    occupation: "Student",
-    income: 300000,
-    gender: "Male",
-    social_category: "General",
-  };
-
   const handleSend = async () => {
     const trimmedQuestion = question.trim();
 
-    if (!trimmedQuestion || loading) {
+    if (!trimmedQuestion || loading) return;
+
+    // Read the latest profile saved by the existing profile form.
+    let profile;
+
+    try {
+      const savedProfile = localStorage.getItem("yojanaProfile");
+      profile = savedProfile ? JSON.parse(savedProfile) : null;
+    } catch (error) {
+      console.error("Error reading saved profile:", error);
+      profile = null;
+    }
+
+    // Require a saved profile before sending the question.
+    if (!profile) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Please set up your profile before asking questions so I can personalize your scheme recommendations.",
+          needsProfile: true,
+        },
+      ]);
+      setQuestion("");
+      return;
+    }
+
+    const requiredFields = [
+      "age",
+      "state",
+      "occupation",
+      "income",
+      "gender",
+      "social_category",
+    ];
+
+    const hasMissingFields = requiredFields.some(
+      (field) =>
+        profile[field] === undefined ||
+        profile[field] === null ||
+        String(profile[field]).trim() === ""
+    );
+
+    if (hasMissingFields) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Your profile is incomplete. Please edit and save it before continuing.",
+          needsProfile: true,
+        },
+      ]);
       return;
     }
 
@@ -45,9 +87,16 @@ function YojanaLM() {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          profile: profile,
+          profile: {
+            age: Number(profile.age),
+            state: profile.state,
+            occupation: profile.occupation,
+            income: Number(profile.income),
+            gender: profile.gender,
+            social_category: profile.social_category,
+          },
           question: trimmedQuestion,
-          language: language,
+          language,
         }),
       });
 
@@ -56,17 +105,14 @@ function YojanaLM() {
       }
 
       const data = await response.json();
-
       let answer = data.answer;
 
-      // Some backend responses may return the answer
-      // inside a stringified Python/JSON object.
       if (typeof answer === "object" && answer !== null) {
         answer =
           answer.answer ||
           answer.response ||
           answer.message ||
-          JSON.stringify(answer);
+          JSON.stringify(answer, null, 2);
       }
 
       if (!answer) {
@@ -88,7 +134,7 @@ function YojanaLM() {
         {
           role: "assistant",
           content:
-            "Sorry, I couldn't connect to YojanaLM right now. Please make sure the backend server is running.",
+            "Sorry, I couldn't connect to YojanaLM. Please check whether the backend server is running.",
           error: true,
         },
       ]);
@@ -111,8 +157,6 @@ function YojanaLM() {
   return (
     <div className="yojanalm-page">
       <div className="yojanalm-container">
-
-        {/* Header */}
         <div className="yojanalm-heading">
           <div className="yojanalm-eyebrow">
             YOJANALM ASSISTANT
@@ -126,10 +170,7 @@ function YojanaLM() {
           </p>
         </div>
 
-        {/* Chat Card */}
         <div className="yojanalm-chat-card">
-
-          {/* Top bar */}
           <div className="yojanalm-topbar">
             <div className="yojanalm-model-info">
               <div className="yojanalm-model-dot"></div>
@@ -153,22 +194,17 @@ function YojanaLM() {
               <select
                 id="language"
                 value={language}
-                onChange={(e) => setLanguage(e.target.value)}
+                onChange={(event) => setLanguage(event.target.value)}
               >
                 <option value="English">English</option>
               </select>
             </div>
           </div>
 
-          {/* Messages */}
           <div className="yojanalm-messages">
-
             {messages.length === 0 ? (
               <div className="yojanalm-empty">
-
-                <div className="yojanalm-empty-icon">
-                  ✦
-                </div>
+                <div className="yojanalm-empty-icon">✦</div>
 
                 <h2>How can I help you?</h2>
 
@@ -178,13 +214,12 @@ function YojanaLM() {
                 </p>
 
                 <div className="yojanalm-profile-note">
-                  YojanaLM provides personalized answers based on
-                  your profile.
+                  Answers use your saved Yojana Mitra profile.
                 </div>
 
                 <div className="yojanalm-suggestions">
-
                   <button
+                    type="button"
                     onClick={() =>
                       handleSuggestion(
                         "What government schemes are available for me?"
@@ -195,6 +230,7 @@ function YojanaLM() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={() =>
                       handleSuggestion(
                         "What are the benefits of PM-KISAN?"
@@ -205,6 +241,7 @@ function YojanaLM() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={() =>
                       handleSuggestion(
                         "What documents are required for PM-KISAN?"
@@ -213,12 +250,10 @@ function YojanaLM() {
                   >
                     Check documents
                   </button>
-
                 </div>
               </div>
             ) : (
               <div className="yojanalm-conversation">
-
                 {messages.map((message, index) => (
                   <div
                     key={index}
@@ -228,11 +263,8 @@ function YojanaLM() {
                         : "assistant-row"
                     }`}
                   >
-
                     {message.role === "assistant" && (
-                      <div className="yojanalm-avatar">
-                        ✦
-                      </div>
+                      <div className="yojanalm-avatar">✦</div>
                     )}
 
                     <div
@@ -240,56 +272,51 @@ function YojanaLM() {
                         message.role === "user"
                           ? "user-message"
                           : "assistant-message"
-                      } ${
-                        message.error
-                          ? "error-message"
-                          : ""
-                      }`}
+                      } ${message.error ? "error-message" : ""}`}
                     >
-                      {message.content
-                        .split("\n")
-                        .map((line, lineIndex) => (
-                          <React.Fragment key={lineIndex}>
-                            {line}
-                            {lineIndex <
-                              message.content.split("\n").length - 1 && (
-                              <br />
-                            )}
-                          </React.Fragment>
-                        ))}
-                    </div>
+                      {message.content.split("\n").map((line, lineIndex, lines) => (
+                        <React.Fragment key={lineIndex}>
+                          {line}
+                          {lineIndex < lines.length - 1 && <br />}
+                        </React.Fragment>
+                      ))}
 
+                      {message.needsProfile && (
+                        <div style={{ marginTop: "12px" }}>
+                          <Link to="/profile-setup">
+                            <button
+                              type="button"
+                              className="primary-button"
+                            >
+                              Set Up / Edit Profile
+                            </button>
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
 
                 {loading && (
                   <div className="yojanalm-message-row assistant-row">
-
-                    <div className="yojanalm-avatar">
-                      ✦
-                    </div>
+                    <div className="yojanalm-avatar">✦</div>
 
                     <div className="yojanalm-message assistant-message loading-message">
                       <span></span>
                       <span></span>
                       <span></span>
                     </div>
-
                   </div>
                 )}
-
               </div>
             )}
           </div>
 
-          {/* Input area */}
           <div className="yojanalm-input-section">
-
             <div className="yojanalm-input-wrapper">
-
               <textarea
                 value={question}
-                onChange={(e) => setQuestion(e.target.value)}
+                onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask YojanaLM about a government scheme..."
                 rows="1"
@@ -297,21 +324,19 @@ function YojanaLM() {
               />
 
               <button
+                type="button"
                 className="yojanalm-send-button"
                 onClick={handleSend}
                 disabled={!question.trim() || loading}
               >
                 {loading ? "..." : "Send"}
               </button>
-
             </div>
 
             <div className="yojanalm-input-hint">
               Press Enter to send
             </div>
-
           </div>
-
         </div>
       </div>
     </div>
