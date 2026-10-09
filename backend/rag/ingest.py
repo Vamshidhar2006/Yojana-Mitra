@@ -1,8 +1,8 @@
 import pandas as pd
 import chromadb
 from pathlib import Path
+from backend.rag.embeddings import create_embeddings
 
-from embeddings import create_embeddings
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
