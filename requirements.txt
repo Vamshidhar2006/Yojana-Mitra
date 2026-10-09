@@ -4,3 +4,5 @@ pandas
 chromadb
 google-genai
 python-dotenv
+torch
+sentencepiece
