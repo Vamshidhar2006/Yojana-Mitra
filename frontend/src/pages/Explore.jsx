@@ -114,9 +114,6 @@ function Explore() {
 
             </div>
 
-            <SearchBar
-                onSearch={handleSearch}
-            />
 
             <IndiaMap
                 onStateSelect={handleStateSelect}

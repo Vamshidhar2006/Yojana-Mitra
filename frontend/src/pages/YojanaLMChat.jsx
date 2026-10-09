@@ -156,8 +156,6 @@ function YojanaLM() {
                 onChange={(e) => setLanguage(e.target.value)}
               >
                 <option value="English">English</option>
-                <option value="Telugu">Telugu</option>
-                <option value="Hindi">Hindi</option>
               </select>
             </div>
           </div>
