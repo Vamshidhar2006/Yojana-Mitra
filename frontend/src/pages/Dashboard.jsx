@@ -4,17 +4,15 @@ import axios from "axios";
 
 import ProfileCard from "../components/ProfileCard";
 import SchemeCard from "../components/SchemeCard";
+import API_BASE_URL from "../services/api";
 
 function Dashboard() {
 
     const [profile, setProfile] = useState(null);
     const [schemes, setSchemes] = useState([]);
     const [loading, setLoading] = useState(true);
+    const apiBaseUrl = API_BASE_URL;
 
-    const apiBaseUrl =
-        window.location.hostname === "localhost"
-            ? "http://127.0.0.1:8000"
-            : "";
 
     useEffect(() => {
 

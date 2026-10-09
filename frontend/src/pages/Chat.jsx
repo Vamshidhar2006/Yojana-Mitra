@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import API_BASE_URL from "../services/api";
 
 function Chat() {
 
@@ -70,10 +71,8 @@ function Chat() {
 
             // Local backend uses port 8000.
             // Render uses the same host, so no separate URL is needed there.
-            const apiBaseUrl =
-                window.location.hostname === "localhost"
-                    ? "http://127.0.0.1:8000"
-                    : "";
+            const apiBaseUrl = API_BASE_URL;
+            
 
 
             const response = await axios.post(

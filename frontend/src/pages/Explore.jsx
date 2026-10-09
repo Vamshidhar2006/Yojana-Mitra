@@ -4,6 +4,7 @@ import axios from "axios";
 import SearchBar from "../components/SearchBar";
 import IndiaMap from "../components/IndiaMap";
 import SchemeCard from "../components/SchemeCard";
+import API_BASE_URL from "../services/api";
 
 function Explore() {
 
@@ -11,11 +12,8 @@ function Explore() {
     const [schemes, setSchemes] = useState([]);
     const [featuredSchemes, setFeaturedSchemes] = useState([]);
     const [loading, setLoading] = useState(false);
+    const apiBaseUrl = API_BASE_URL;
 
-    const apiBaseUrl =
-        window.location.hostname === "localhost"
-            ? "http://127.0.0.1:8000"
-            : "";
 
     // Load a few schemes when Explore page opens
     useEffect(() => {

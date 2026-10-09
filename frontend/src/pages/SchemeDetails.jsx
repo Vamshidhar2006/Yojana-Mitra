@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import API_BASE_URL from "../services/api";
 
 function SchemeDetails() {
 
@@ -8,11 +9,9 @@ function SchemeDetails() {
 
     const [scheme, setScheme] = useState(null);
     const [loading, setLoading] = useState(true);
+    const apiBaseUrl = API_BASE_URL;
 
-    const apiBaseUrl =
-        window.location.hostname === "localhost"
-            ? "http://127.0.0.1:8000"
-            : "";
+
 
     useEffect(() => {
 
