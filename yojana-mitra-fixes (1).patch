@@ -1,0 +1,2172 @@
+diff --git a/api/main.py b/api/main.py
+index 5cca1b9..7682cb9 100644
+--- a/api/main.py
++++ b/api/main.py
+@@ -211,27 +211,19 @@ def ask_yojanalm(request: AskRequest):
+         profile = request.profile.model_dump()
+ 
+ 
+-        # ------------------------------------------------------
+-        # Build a natural-language query
+-        # ------------------------------------------------------
+-
+-        profile_text = (
+-            f"I am {profile['age']} years old, "
+-            f"from {profile['state']}, "
+-            f"working as a {profile['occupation']}, "
+-            f"with an annual income of {profile['income']}, "
+-            f"gender {profile['gender']}, "
+-            f"social category {profile['social_category']}. "
+-        )
+-
+-        query = profile_text + request.question
+-
+-
+         # ------------------------------------------------------
+         # Call YojanaLM
++        #
++        # The structured profile is passed straight through. It used
++        # to be flattened into a sentence and re-parsed with regexes,
++        # which dropped the age ("21 years old" did not match) and
++        # mangled the income.
+         # ------------------------------------------------------
+ 
+-        answer = chatbot_response(query)
++        answer = chatbot_response(
++            request.question,
++            profile=profile
++        )
+ 
+ 
+         # ------------------------------------------------------
+diff --git a/backend/chatbot/chatbot.py b/backend/chatbot/chatbot.py
+index 431c624..7a5e6e9 100644
+--- a/backend/chatbot/chatbot.py
++++ b/backend/chatbot/chatbot.py
+@@ -1,12 +1,13 @@
+ from backend.yojanaLM.retrieval.answer import yojana_answer
+ 
+ 
+-def chatbot_response(query: str):
++def chatbot_response(query: str, profile: dict = None):
+     """
+     YojanaLM chatbot bridge.
+ 
+-    Takes a plain-text query and returns ONLY the
+-    final natural-language answer.
++    Takes a plain-text query (and optionally the structured profile
++    from the profile form) and returns ONLY the final
++    natural-language answer.
+     """
+ 
+     if not query or not query.strip():
+@@ -15,7 +16,8 @@ def chatbot_response(query: str):
+     try:
+         result = yojana_answer(
+             query=query.strip(),
+-            top_k=3
++            top_k=3,
++            profile=profile
+         )
+ 
+         # answer.py returns a dictionary containing:
+diff --git a/backend/rag/data.py b/backend/rag/data.py
+new file mode 100644
+index 0000000..2eb8e7c
+--- /dev/null
++++ b/backend/rag/data.py
+@@ -0,0 +1,20 @@
++"""Single shared loader for the master scheme CSV.
++
++eligibility.py, the YojanaLM engine and name_match.py all need the same
++25 MB CSV. Loading it once avoids parsing it three times at start-up.
++Treat the returned DataFrame as read-only.
++"""
++
++from functools import lru_cache
++from pathlib import Path
++
++import pandas as pd
++
++
++BASE_DIR = Path(__file__).resolve().parents[2]
++CSV_PATH = BASE_DIR / "data" / "csv" / "yojana_mitra_master.csv"
++
++
++@lru_cache(maxsize=1)
++def load_master():
++    return pd.read_csv(CSV_PATH)
+diff --git a/backend/rag/eligibility.py b/backend/rag/eligibility.py
+index 1d81946..a32b43a 100644
+--- a/backend/rag/eligibility.py
++++ b/backend/rag/eligibility.py
+@@ -1,11 +1,22 @@
++from functools import lru_cache
++
+ import pandas as pd
+-from pathlib import Path
++
++from backend.rag.data import load_master
++from backend.rag.vocab import (
++    UNRESTRICTED_STATES,
++    canonical_state,
++    norm,
++    occupation_status,
++    scheme_states,
++    split_multi,
++)
+ 
+ 
+-BASE_DIR = Path(__file__).resolve().parents[2]
+-CSV_PATH = BASE_DIR / "data" / "csv" / "yojana_mitra_master.csv"
++df = load_master()
+ 
+-df = pd.read_csv(CSV_PATH)
++# Plain dicts are ~4x faster to iterate than DataFrame.iterrows()
++_RECORDS = df.to_dict("records")
+ 
+ 
+ def clean(value):
+@@ -21,22 +32,14 @@ def clean(value):
+ 
+ 
+ def split_values(value):
++    """Kept for backwards compatibility; see vocab.split_multi."""
++
+     value = clean(value)
+ 
+     if value is None:
+         return []
+ 
+-    value = (
+-        value.replace("[", "")
+-        .replace("]", "")
+-        .replace("'", "")
+-        .replace('"', "")
+-        .replace(",", ";")
+-        .replace("|", ";")
+-        .replace("/", ";")
+-    )
+-
+-    return [x.strip() for x in value.split(";") if x.strip()]
++    return [norm(piece) for piece in split_multi(value) if norm(piece)]
+ 
+ 
+ def check_age(user_age, min_age, max_age):
+@@ -86,18 +89,18 @@ def check_income(user_income, income_limit):
+ 
+ 
+ def check_category(user_value, scheme_value):
++    """Used for social category (general / obc / sc / st / ews)."""
+ 
+-    user_value = clean(user_value)
++    user_value = norm(clean(user_value))
+     scheme_values = split_values(scheme_value)
+ 
+-    if user_value is None:
++    if not user_value:
+         return "unknown"
+ 
+-    # No restriction recorded
++    # No restriction recorded (the CSV stores '[]' for most rows)
+     if not scheme_values:
+         return "unknown"
+ 
+-    # General unrestricted values
+     unrestricted = {
+         "all",
+         "all india",
+@@ -111,34 +114,55 @@ def check_category(user_value, scheme_value):
+     if any(value in unrestricted for value in scheme_values):
+         return "eligible"
+ 
+-    # Direct match
+     if user_value in scheme_values:
+         return "eligible"
+ 
+     return "not_eligible"
+ 
+ 
++def check_gender(user_gender, scheme_gender):
++
++    user_gender = norm(clean(user_gender))
++    scheme_values = split_values(scheme_gender)
++
++    if not user_gender or not scheme_values:
++        return "unknown"
++
++    if any(
++        value in {"any", "all", "both", "male female", "everyone"}
++        for value in scheme_values
++    ):
++        return "eligible"
++
++    # "Other" / unspecified: a gender-restricted scheme is not ruled out,
++    # it just cannot be confirmed.
++    if user_gender not in {"male", "female"}:
++        return "unknown"
++
++    if user_gender in scheme_values:
++        return "eligible"
++
++    return "not_eligible"
++
++
++def check_occupation(user_occupation, scheme_occupation):
++
++    return occupation_status(user_occupation, scheme_occupation)
++
++
+ def check_state(user_state, scheme_state):
+ 
+-    user_state = clean(user_state)
++    user_state = canonical_state(clean(user_state))
+ 
+-    if user_state is None:
++    if not user_state:
+         return "unknown"
+ 
+-    scheme_values = split_values(scheme_state)
++    scheme_values = scheme_states(scheme_state)
+ 
+     if not scheme_values:
+         return "unknown"
+ 
+-    unrestricted = {
+-        "all",
+-        "all india",
+-        "india",
+-        "national",
+-        "nationwide"
+-    }
+-
+-    if any(value in unrestricted for value in scheme_values):
++    if scheme_values & UNRESTRICTED_STATES:
+         return "eligible"
+ 
+     if user_state in scheme_values:
+@@ -167,12 +191,12 @@ def check_scheme(user_profile, scheme):
+         scheme.get("state")
+     )
+ 
+-    checks["occupation"] = check_category(
++    checks["occupation"] = check_occupation(
+         user_profile.get("occupation"),
+         scheme.get("occupation")
+     )
+ 
+-    checks["gender"] = check_category(
++    checks["gender"] = check_gender(
+         user_profile.get("gender"),
+         scheme.get("gender")
+     )
+@@ -199,13 +223,24 @@ def check_scheme(user_profile, scheme):
+     }
+ 
+ 
+-def get_candidate_schemes(user_profile):
++_PROFILE_KEYS = (
++    "age",
++    "income",
++    "state",
++    "occupation",
++    "gender",
++    "social_category",
++)
+ 
+-    candidates = []
+ 
+-    for _, row in df.iterrows():
++@lru_cache(maxsize=256)
++def _candidates_for(profile_key):
+ 
+-        scheme = row.to_dict()
++    user_profile = dict(profile_key)
++
++    candidates = []
++
++    for scheme in _RECORDS:
+ 
+         result = check_scheme(user_profile, scheme)
+ 
+@@ -224,6 +259,21 @@ def get_candidate_schemes(user_profile):
+     return candidates
+ 
+ 
++def get_candidate_schemes(user_profile):
++    """Schemes that the profile does not explicitly rule out.
++
++    The result is cached per profile (the scan touches every row), so
++    treat the returned list as read-only.
++    """
++
++    key = tuple(
++        (name, user_profile.get(name))
++        for name in _PROFILE_KEYS
++    )
++
++    return _candidates_for(key)
++
++
+ if __name__ == "__main__":
+ 
+     user_profile = {
+@@ -253,4 +303,4 @@ if __name__ == "__main__":
+         print("State:", scheme["state"])
+         print("Category:", scheme["category"])
+         print("Status:", scheme["eligibility_status"])
+-        print("Checks:", scheme["checks"])
+\ No newline at end of file
++        print("Checks:", scheme["checks"])
+diff --git a/backend/rag/name_match.py b/backend/rag/name_match.py
+new file mode 100644
+index 0000000..9ba784c
+--- /dev/null
++++ b/backend/rag/name_match.py
+@@ -0,0 +1,267 @@
++"""Find the scheme a user is naming in a question.
++
++The previous exact-name logic only worked if the user typed the full
++official scheme name, and it used a substring alias check, so any
++question containing "PM Kisan" (including "PM Kisan Maandhan") returned
++PM-KISAN Samman Nidhi.
++
++Rules used here
++---------------
++* Names are compared after normalisation, with generic words
++  ("yojana", "scheme", "the", ...) removed and "Pradhan Mantri" / "Chief
++  Minister" shortened to "pm" / "cm", because users type the short form.
++* A scheme matches when its whole (compacted) name appears in the
++  question, so "PM Kisan Maan-dhan" matches "Pradhan Mantri Kisan
++  Maandhan Yojana".
++* Short abbreviations come from ALIASES (only for schemes that exist in
++  the CSV).
++* When several schemes match, the LONGEST match wins. That is what makes
++  "PM Kisan Maandhan" beat the "PM Kisan" alias.
++* Nothing fuzzy is ever returned as a match. Fuzzy matching is only used
++  to offer "did you mean ...?" suggestions.
++"""
++
++import difflib
++import re
++from functools import lru_cache
++
++from backend.rag.data import load_master
++from backend.rag.vocab import norm
++
++
++GENERIC = frozenset({
++    "yojana", "yojna", "scheme", "schemes", "programme", "program",
++    "mission", "abhiyan", "the", "of", "for", "and", "in", "to", "a",
++    "an", "under", "by", "with", "from", "on",
++})
++
++# alias (norm()-ed)  ->  official scheme name (as written in the CSV)
++ALIASES = {
++    "pm kisan": "PM-KISAN Samman Nidhi",
++    "pmkisan": "PM-KISAN Samman Nidhi",
++    "pm kisan nidhi": "PM-KISAN Samman Nidhi",
++    "kisan samman nidhi": "PM-KISAN Samman Nidhi",
++    "pmay g": "Pradhan Mantri Awas Yojana - Gramin",
++    "pmayg": "Pradhan Mantri Awas Yojana - Gramin",
++    "pm jay": "Ayushman Bharat PM-JAY",
++    "pmjay": "Ayushman Bharat PM-JAY",
++    "kcc": "Kisan Credit Card",
++}
++
++
++def _prep(text):
++    """norm() plus the short forms people actually type."""
++
++    text = norm(text)
++    text = re.sub(r"\bpradhan mantri\b", "pm", text)
++    text = re.sub(r"\b(chief minister|mukhya mantri|mukhyamantri)\b", "cm", text)
++
++    return text
++
++
++def _tokens(text):
++
++    return [t for t in _prep(text).split() if t not in GENERIC]
++
++
++@lru_cache(maxsize=1)
++def _index():
++
++    master = load_master()
++
++    entries = []
++
++    for scheme_id, name in zip(
++        master["scheme_id"].astype(str),
++        master["scheme_name"].fillna("").astype(str)
++    ):
++
++        tokens = tuple(_tokens(name))
++
++        if not tokens:
++            continue
++
++        entries.append({
++            "scheme_id": scheme_id,
++            "scheme_name": name,
++            "prep": _prep(name),
++            "tokens": tokens,
++            "key": "".join(tokens),
++        })
++
++    return entries
++
++
++def _contains_sequence(haystack, needle):
++
++    n = len(needle)
++
++    if n == 0:
++        return False
++
++    return any(
++        haystack[i:i + n] == needle
++        for i in range(len(haystack) - n + 1)
++    )
++
++
++def find_scheme_matches(query):
++    """All schemes named in `query`, best (longest) match first."""
++
++    query_tokens = [t for t in _prep(query).split()]
++    query_no_generic = [t for t in query_tokens if t not in GENERIC]
++    query_compact = "".join(query_no_generic)
++
++    hits = {}
++
++    # 1) full official name present in the question
++    for entry in _index():
++
++        key = entry["key"]
++
++        if len(key) >= 8:
++            matched = key in query_compact
++        else:
++            matched = _contains_sequence(
++                query_no_generic,
++                list(entry["tokens"])
++            )
++
++        if matched:
++            hits[entry["scheme_id"]] = (len(key), "name", entry)
++
++    # 2) known abbreviations
++    for alias, official in ALIASES.items():
++
++        alias_tokens = alias.split()
++
++        if not _contains_sequence(query_tokens, alias_tokens):
++            continue
++
++        official_prep = _prep(official)
++
++        for entry in _index():
++
++            if entry["prep"] != official_prep:
++                continue
++
++            length = len("".join(alias_tokens))
++            current = hits.get(entry["scheme_id"])
++
++            if current is None or length > current[0]:
++                hits[entry["scheme_id"]] = (length, "alias", entry)
++
++    ranked = sorted(
++        hits.values(),
++        key=lambda item: item[0],
++        reverse=True
++    )
++
++    return [
++        {
++            "scheme_id": entry["scheme_id"],
++            "scheme_name": entry["scheme_name"],
++            "match": kind,
++            "length": length,
++        }
++        for length, kind, entry in ranked
++    ]
++
++
++def find_best_scheme_row(query, master=None):
++    """The master-CSV row for the single best named scheme, or None."""
++
++    matches = find_scheme_matches(query)
++
++    if not matches:
++        return None
++
++    if master is None:
++        master = load_master()
++
++    scheme_id = matches[0]["scheme_id"]
++
++    rows = master[master["scheme_id"].astype(str) == scheme_id]
++
++    if rows.empty:
++        return None
++
++    return rows.iloc[0]
++
++
++def find_named_scheme_ids(query, limit=2):
++
++    return [
++        match["scheme_id"]
++        for match in find_scheme_matches(query)[:limit]
++    ]
++
++
++@lru_cache(maxsize=1)
++def _token_index():
++
++    inverted = {}
++
++    for position, entry in enumerate(_index()):
++
++        for token in set(entry["tokens"]):
++            inverted.setdefault(token, set()).add(position)
++
++    return inverted
++
++
++def suggest_similar(phrase, limit=3):
++    """'Did you mean' names for a phrase that matched nothing."""
++
++    phrase_tokens = _tokens(phrase)
++
++    if not phrase_tokens:
++        return []
++
++    inverted = _token_index()
++    vocabulary = list(inverted)
++
++    scores = {}
++
++    for token in set(phrase_tokens):
++
++        close = difflib.get_close_matches(
++            token,
++            vocabulary,
++            n=3,
++            cutoff=0.8
++        )
++
++        for similar in close:
++
++            positions = inverted[similar]
++
++            # rare words are stronger evidence than common ones
++            weight = 1.0 / len(positions)
++
++            for position in positions:
++                scores[position] = scores.get(position, 0.0) + weight
++
++    if not scores:
++        return []
++
++    entries = _index()
++
++    ranked = sorted(
++        scores.items(),
++        key=lambda item: (-item[1], len(entries[item[0]]["tokens"]))
++    )
++
++    names = []
++
++    for position, _ in ranked:
++
++        name = entries[position]["scheme_name"]
++
++        if name not in names:
++            names.append(name)
++
++        if len(names) == limit:
++            break
++
++    return names
+diff --git a/backend/rag/personalized_retrieval.py b/backend/rag/personalized_retrieval.py
+index 2b23033..a653f45 100644
+--- a/backend/rag/personalized_retrieval.py
++++ b/backend/rag/personalized_retrieval.py
+@@ -6,9 +6,11 @@ BASE_DIR = Path(__file__).resolve().parents[2]
+ sys.path.append(str(BASE_DIR))
+ 
+ import chromadb
++import numpy as np
+ 
+ from backend.rag.embeddings import create_embeddings
+ from backend.rag.eligibility import get_candidate_schemes
++from backend.rag.name_match import find_named_scheme_ids
+ 
+ 
+ # -----------------------------------------
+@@ -26,6 +28,53 @@ collection = client.get_collection(
+ )
+ 
+ 
++# How many nearest neighbours to pull before applying the profile filter.
++# Filtering AFTER the vector search avoids passing thousands of ids to
++# Chroma's `where={"scheme_id": {"$in": [...]}}`, which builds one SQL
++# parameter per id and can hit SQLite's variable limit.
++FIRST_PASS = 300
++
++
++def _empty():
++    return {
++        "ids": [[]],
++        "documents": [[]],
++        "metadatas": [[]],
++        "distances": [[]]
++    }
++
++
++def _query_and_filter(query_embedding, allowed_ids, top_k, fetch_n):
++
++    raw = collection.query(
++        query_embeddings=[query_embedding],
++        n_results=fetch_n,
++        include=["documents", "metadatas", "distances"]
++    )
++
++    kept = {
++        "ids": [],
++        "documents": [],
++        "metadatas": [],
++        "distances": []
++    }
++
++    for position, scheme_id in enumerate(raw["ids"][0]):
++
++        if str(scheme_id) not in allowed_ids:
++            continue
++
++        kept["ids"].append(str(scheme_id))
++        kept["documents"].append(raw["documents"][0][position])
++        kept["metadatas"].append(raw["metadatas"][0][position])
++        kept["distances"].append(raw["distances"][0][position])
++
++        if len(kept["ids"]) == top_k:
++            break
++
++    return kept
++
++
+ # -----------------------------------------
+ # Personalized search
+ # -----------------------------------------
+@@ -36,49 +85,91 @@ def personalized_search(
+     top_k=5
+ ):
+ 
+-    # Get schemes that are not explicitly
+-    # ruled out by the user's profile
++    # Schemes that are not explicitly ruled out by the user's profile
+     candidates = get_candidate_schemes(
+         user_profile
+     )
+ 
+-    # Get valid scheme IDs
+-    candidate_ids = [
++    candidate_ids = {
+         str(candidate["scheme_id"])
+         for candidate in candidates
+         if candidate.get("scheme_id") is not None
++    }
++
++    # A scheme the user names directly must always be retrievable, even
++    # if the profile filter would drop it. The answer prompt already tells
++    # the model not to claim eligibility that is not proven.
++    named_ids = [
++        str(scheme_id)
++        for scheme_id in find_named_scheme_ids(query, limit=2)
+     ]
+ 
+-    # No candidate schemes
+-    if not candidate_ids:
+-        return {
+-            "documents": [[]],
+-            "metadatas": [[]],
+-            "distances": [[]]
+-        }
++    if not candidate_ids and not named_ids:
++        return _empty()
++
++    query_embedding = np.asarray(
++        create_embeddings([query])[0],
++        dtype=float
++    ).tolist()
+ 
+-    # Create embedding for user's question
+-    query_embedding = create_embeddings(
+-        [query]
+-    )[0]
+-
+-    # Search only among personalized candidates
+-    results = collection.query(
+-        query_embeddings=[
+-            query_embedding
+-        ],
+-        n_results=min(
++    total = collection.count()
++
++    results = _query_and_filter(
++        query_embedding,
++        candidate_ids,
++        top_k,
++        min(FIRST_PASS, total)
++    )
++
++    # Narrow profiles: widen the search before giving up
++    if len(results["ids"]) < top_k and FIRST_PASS < total:
++
++        results = _query_and_filter(
++            query_embedding,
++            candidate_ids,
+             top_k,
+-            len(candidate_ids)
+-        ),
+-        where={
+-            "scheme_id": {
+-                "$in": candidate_ids
+-            }
++            total
++        )
++
++    # Put directly-named schemes first
++    if named_ids:
++
++        pinned = collection.get(
++            ids=named_ids,
++            include=["documents", "metadatas"]
++        )
++
++        front = {
++            "ids": [],
++            "documents": [],
++            "metadatas": [],
++            "distances": []
+         }
+-    )
+ 
+-    return results
++        for position, scheme_id in enumerate(pinned["ids"]):
++
++            front["ids"].append(str(scheme_id))
++            front["documents"].append(pinned["documents"][position])
++            front["metadatas"].append(pinned["metadatas"][position])
++            front["distances"].append(0.0)
++
++        for position, scheme_id in enumerate(results["ids"]):
++
++            if scheme_id in front["ids"]:
++                continue
++
++            for field in front:
++                front[field].append(results[field][position])
++
++        results = {
++            field: values[:top_k]
++            for field, values in front.items()
++        }
++
++    return {
++        field: [values]
++        for field, values in results.items()
++    }
+ 
+ 
+ # -----------------------------------------
+@@ -135,4 +226,4 @@ if __name__ == "__main__":
+         print(
+             "Category:",
+             metadata.get("category", "")
+-        )
+\ No newline at end of file
++        )
+diff --git a/backend/rag/retrieve.py b/backend/rag/retrieve.py
+index 33884b7..dd0e119 100644
+--- a/backend/rag/retrieve.py
++++ b/backend/rag/retrieve.py
+@@ -1,9 +1,12 @@
+-import chromadb
+-from embeddings import create_embeddings
+-
++import sys
+ from pathlib import Path
+ 
++import chromadb
++
+ BASE_DIR = Path(__file__).resolve().parents[2]
++sys.path.append(str(BASE_DIR))
++
++from backend.rag.embeddings import create_embeddings
+ CHROMA_PATH = BASE_DIR / "data" / "chroma"
+ 
+ # Connect to existing ChromaDB
+diff --git a/backend/rag/vocab.py b/backend/rag/vocab.py
+new file mode 100644
+index 0000000..bcb9ef2
+--- /dev/null
++++ b/backend/rag/vocab.py
+@@ -0,0 +1,246 @@
++"""Vocabulary helpers shared by both chatbots.
++
++Why this file exists
++--------------------
++The profile form (frontend) and the scheme CSV use different words for
++the same things:
++
++    frontend occupation     CSV occupation column
++    --------------------    -----------------------------------------
++    "Self Employed"         "self_employed"            (underscore)
++    "Government Employee"   "salaried"
++    "Private Employee"      "salaried"
++    "Business"              "self_employed" / "Business Entity"
++    "Homemaker", "Other"    (no equivalent)
++
++On top of that, ~1,600 rows have a *beneficiary type* ("Individual",
++"Family", "Business Entity", "NGO", ...) stored in the occupation column.
++The old filter treated those as occupations, so a Student never matched
++any "Individual" scheme and most non-student profiles matched only ~11 of
++4,705 schemes.
++
++The rule used here: only the six real occupations below can EXCLUDE a
++scheme. Anything else in the CSV is ignored, and a user occupation we
++cannot map (Homemaker, Retired, Other) never excludes anything.
++"""
++
++import re
++
++
++# ---------------------------------------------------------------------
++# Text normalisation
++# ---------------------------------------------------------------------
++
++def norm(value):
++    """Lower-case, '&' -> 'and', everything else non-alphanumeric -> space."""
++
++    if value is None:
++        return ""
++
++    if isinstance(value, float) and value != value:  # NaN
++        return ""
++
++    text = str(value).lower().replace("&", " and ")
++    text = re.sub(r"[^a-z0-9₹]+", " ", text)
++
++    return re.sub(r"\s+", " ", text).strip()
++
++
++def split_multi(value):
++    """Split a CSV cell such as 'student;daily_wage' or '["Bihar"]'."""
++
++    if value is None:
++        return []
++
++    if isinstance(value, float) and value != value:
++        return []
++
++    text = str(value)
++    text = re.sub(r"[\[\]'\"]", "", text)
++
++    return [
++        piece.strip()
++        for piece in re.split(r"[;,|/]", text)
++        if piece.strip()
++    ]
++
++
++# ---------------------------------------------------------------------
++# Occupation
++# ---------------------------------------------------------------------
++
++CANONICAL_OCCUPATIONS = (
++    "student",
++    "farmer",
++    "self_employed",
++    "salaried",
++    "daily_wage",
++    "unemployed",
++)
++
++# keys are norm()-ed
++OCCUPATION_ALIASES = {
++
++    # student
++    "student": "student",
++    "students": "student",
++    "school student": "student",
++    "college student": "student",
++    "scholar": "student",
++
++    # farmer
++    "farmer": "farmer",
++    "farmers": "farmer",
++    "agriculturist": "farmer",
++    "cultivator": "farmer",
++    "agricultural": "farmer",
++
++    # self employed / business
++    "self employed": "self_employed",
++    "selfemployed": "self_employed",
++    "business": "self_employed",
++    "businessman": "self_employed",
++    "business owner": "self_employed",
++    "entrepreneur": "self_employed",
++    "entrepreneurs": "self_employed",
++    "artisan": "self_employed",
++    "artisans": "self_employed",
++    "shopkeeper": "self_employed",
++    "trader": "self_employed",
++
++    # salaried
++    "salaried": "salaried",
++    "government employee": "salaried",
++    "govt employee": "salaried",
++    "private employee": "salaried",
++    "employee": "salaried",
++    "employees": "salaried",
++    "teacher": "salaried",
++    "teachers": "salaried",
++
++    # daily wage
++    "daily wage": "daily_wage",
++    "daily wages": "daily_wage",
++    "daily wager": "daily_wage",
++    "wage worker": "daily_wage",
++    "labourer": "daily_wage",
++    "laborer": "daily_wage",
++    "labour": "daily_wage",
++    "worker": "daily_wage",
++    "workers": "daily_wage",
++
++    # unemployed
++    "unemployed": "unemployed",
++    "jobless": "unemployed",
++    "job seeker": "unemployed",
++}
++
++
++def canonical_user_occupation(value):
++    """Map a user-facing occupation label to one of CANONICAL_OCCUPATIONS.
++
++    Returns None when there is no sensible mapping (Homemaker, Retired,
++    Other, ...). None means "do not filter on occupation".
++    """
++
++    text = norm(value)
++
++    if not text:
++        return None
++
++    return OCCUPATION_ALIASES.get(text)
++
++
++def find_occupation_in_text(text):
++    """Find an occupation word inside a free-text (already norm()-ed) query."""
++
++    best = None
++
++    for alias, canonical in OCCUPATION_ALIASES.items():
++
++        match = re.search(rf"\b{re.escape(alias)}\b", text)
++
++        if not match:
++            continue
++
++        # earliest mention wins; for ties the longer alias wins
++        key = (match.start(), -len(alias))
++
++        if best is None or key < best[0]:
++            best = (key, canonical)
++
++    return best[1] if best else None
++
++
++def scheme_occupations(value):
++    """Recognised occupations listed on a scheme row (may be empty).
++
++    'Individual', 'Family', 'Business Entity', 'NGO' ... are beneficiary
++    types, not occupations, and are ignored.
++    """
++
++    found = set()
++
++    for piece in split_multi(value):
++
++        canonical = OCCUPATION_ALIASES.get(norm(piece))
++
++        if canonical:
++            found.add(canonical)
++
++    return found
++
++
++def occupation_status(user_occupation, scheme_occupation_cell):
++    """'eligible' | 'not_eligible' | 'unknown' for one scheme row."""
++
++    user = canonical_user_occupation(user_occupation)
++
++    if user is None:
++        return "unknown"
++
++    allowed = scheme_occupations(scheme_occupation_cell)
++
++    if not allowed:
++        return "unknown"
++
++    return "eligible" if user in allowed else "not_eligible"
++
++
++# ---------------------------------------------------------------------
++# State
++# ---------------------------------------------------------------------
++
++UNRESTRICTED_STATES = {
++    "all india",
++    "india",
++    "all",
++    "all states",
++    "national",
++    "nationwide",
++    "pan india",
++}
++
++STATE_ALIASES = {
++    "orissa": "odisha",
++    "pondicherry": "puducherry",
++    "new delhi": "delhi",
++    "nct of delhi": "delhi",
++    "uttaranchal": "uttarakhand",
++}
++
++
++def canonical_state(value):
++
++    text = norm(value)
++
++    return STATE_ALIASES.get(text, text)
++
++
++def scheme_states(value):
++
++    return {
++        canonical_state(piece)
++        for piece in split_multi(value)
++        if canonical_state(piece)
++    }
+diff --git a/backend/yojanaLM/retrieval/answer.py b/backend/yojanaLM/retrieval/answer.py
+index c642d40..7fa344a 100644
+--- a/backend/yojanaLM/retrieval/answer.py
++++ b/backend/yojanaLM/retrieval/answer.py
+@@ -1,4 +1,5 @@
+ from .engine import yojana_query_v32
++from backend.rag.name_match import suggest_similar
+ import re
+ 
+ 
+@@ -80,6 +81,7 @@ def normalize_label(value):
+         return ""
+ 
+     value = value.replace("_", " ")
++    value = value.replace(";", ", ")
+     value = re.sub(r"\s+", " ", value)
+ 
+     return value.strip()
+@@ -106,6 +108,16 @@ def format_documents(value):
+ # PROFILE FORMATTING
+ # ============================================================
+ 
++OCCUPATION_PHRASES = {
++    "student": "a student",
++    "farmer": "a farmer",
++    "self_employed": "self-employed",
++    "salaried": "a salaried employee",
++    "daily_wage": "a daily-wage worker",
++    "unemployed": "unemployed",
++}
++
++
+ def format_profile(profile):
+     profile = profile or {}
+ 
+@@ -133,7 +145,10 @@ def format_profile(profile):
+ 
+     if occupation:
+         parts.append(
+-            f"a {occupation.lower()}"
++            OCCUPATION_PHRASES.get(
++                occupation.lower(),
++                f"a {occupation.lower()}"
++            )
+         )
+ 
+     if state:
+@@ -366,6 +381,33 @@ def extract_scheme_phrase(query):
+     return ""
+ 
+ 
++DISCOVERY_WORDS = {
++    "schemes", "available", "best", "any", "list", "options",
++    "suggest", "recommend", "recommended", "good", "top", "which",
++    "what", "can", "should", "me", "my", "i", "we", "us",
++}
++
++
++def is_discovery_phrase(phrase):
++    """True for 'schemes for farmers', 'the best scheme ...' etc.
++
++    The extract_scheme_phrase patterns ('what is (.+)', 'tell me about
++    (.+)') capture ANY text, so a general question was being answered
++    with "I couldn't find an exact match for ...". Phrases like these
++    are searches, not scheme names.
++    """
++
++    words = normalize_name(phrase).split()
++
++    if not words:
++        return True
++
++    if words[0] in {"the", "any", "all"} and len(words) > 1:
++        return True
++
++    return any(word in DISCOVERY_WORDS for word in words)
++
++
+ def find_scheme_in_results(
+     query,
+     retrieval
+@@ -1062,13 +1104,27 @@ def no_exact_scheme_answer(
+ 
+     if phrase:
+ 
+-        return (
++        message = (
+             f"I couldn't find an exact match for "
+             f"\"{phrase}\" in the current scheme database.\n\n"
+             "I don't want to give you information about a "
+             "different scheme just because its name is similar."
+         )
+ 
++        suggestions = suggest_similar(phrase)
++
++        if suggestions:
++
++            message += (
++                "\n\nDid you mean one of these?\n"
++                + "\n".join(
++                    f"- {name}"
++                    for name in suggestions
++                )
++            )
++
++        return message
++
+     return (
+         "I couldn't find a sufficiently relevant scheme in "
+         "the current database for that question."
+@@ -1081,7 +1137,8 @@ def no_exact_scheme_answer(
+ 
+ def yojana_answer(
+     query,
+-    top_k=3
++    top_k=3,
++    profile=None
+ ):
+ 
+     query = clean_text(
+@@ -1105,7 +1162,8 @@ def yojana_answer(
+         top_k=max(
+             12,
+             top_k
+-        )
++        ),
++        profile_override=profile
+     )
+ 
+     retrieval_type = retrieval.get(
+@@ -1231,6 +1289,7 @@ def yojana_answer(
+ 
+     if (
+         explicit_scheme_phrase
++        and not is_discovery_phrase(explicit_scheme_phrase)
+         and style in {
+             "overview",
+             "benefits",
+diff --git a/backend/yojanaLM/retrieval/engine.py b/backend/yojanaLM/retrieval/engine.py
+index 06eb5f9..6fc99bd 100644
+--- a/backend/yojanaLM/retrieval/engine.py
++++ b/backend/yojanaLM/retrieval/engine.py
+@@ -1,4 +1,5 @@
+ from pathlib import Path
++import sys
+ import re
+ import math
+ import pandas as pd
+@@ -11,11 +12,16 @@ import pandas as pd
+ BACKEND_DIR = Path(__file__).resolve().parents[2]
+ PROJECT_DIR = BACKEND_DIR.parent
+ 
+-MASTER_CSV = (
+-    PROJECT_DIR
+-    / "data"
+-    / "csv"
+-    / "yojana_mitra_master.csv"
++if str(PROJECT_DIR) not in sys.path:
++    sys.path.insert(0, str(PROJECT_DIR))
++
++from backend.rag.data import load_master
++from backend.rag.name_match import find_best_scheme_row
++from backend.rag.vocab import (
++    STATE_ALIASES,
++    canonical_user_occupation,
++    find_occupation_in_text,
++    occupation_status,
+ )
+ 
+ 
+@@ -23,7 +29,7 @@ MASTER_CSV = (
+ # LOAD MASTER DATABASE
+ # ============================================================
+ 
+-master = pd.read_csv(MASTER_CSV)
++master = load_master()
+ 
+ print(
+     f"Master database loaded: {master.shape}"
+@@ -44,11 +50,14 @@ def normalize_text(value):
+ 
+     value = str(value).lower().strip()
+ 
+-    value = re.sub(
+-        r"[^a-z0-9₹]+",
+-        " ",
+-        value
+-    )
++    value = value.replace("&", " and ")
++
++    # 3,00,000 -> 300000   (Indian digit grouping)
++    value = re.sub(r"(?<=\d),(?=\d)", "", value)
++
++    # keep a '.' only when it sits between two digits (3.5, 300000.0)
++    value = re.sub(r"[^a-z0-9₹.]+", " ", value)
++    value = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", value)
+ 
+     return re.sub(
+         r"\s+",
+@@ -57,6 +66,68 @@ def normalize_text(value):
+     ).strip()
+ 
+ 
++# ============================================================
++# STATE DETECTION
++# ============================================================
++
++def _build_state_list():
++
++    names = {
++        "andhra pradesh", "arunachal pradesh", "assam", "bihar",
++        "chhattisgarh", "goa", "gujarat", "haryana",
++        "himachal pradesh", "jharkhand", "karnataka", "kerala",
++        "madhya pradesh", "maharashtra", "manipur", "meghalaya",
++        "mizoram", "nagaland", "odisha", "punjab", "rajasthan",
++        "sikkim", "tamil nadu", "telangana", "tripura",
++        "uttar pradesh", "uttarakhand", "west bengal", "delhi",
++        "jammu and kashmir", "ladakh", "puducherry", "chandigarh",
++        "lakshadweep", "andaman and nicobar islands",
++        "dadra and nagar haveli and daman and diu",
++    }
++
++    # plus whatever the CSV actually uses (some cells look like '["Bihar"]')
++    for cell in master["state"].dropna().astype(str):
++
++        for piece in re.split(r"[;,\[\]\"']+", cell):
++
++            name = normalize_text(piece)
++
++            if name and name not in ("all india", "india"):
++                names.add(name)
++
++    return sorted(names, key=len, reverse=True)
++
++
++STATE_NAMES = _build_state_list()
++
++
++def find_state_in_text(q):
++    """State mentioned in a normalised query (earliest mention wins).
++
++    Uses whole-word matching so that e.g. 'goa' does not fire inside
++    'goal'.
++    """
++
++    best = None
++
++    candidates = [(name, name) for name in STATE_NAMES]
++    candidates += list(STATE_ALIASES.items())
++
++    for spelled, canonical in candidates:
++
++        match = re.search(rf"\b{re.escape(spelled)}\b", q)
++
++        if not match:
++            continue
++
++        key = (match.start(), -len(spelled))
++
++        if best is None or key < best[0]:
++            best = (key, canonical)
++
++    return best[1] if best else ""
++
++
+ # ============================================================
+ # PROFILE EXTRACTION
+ # ============================================================
+@@ -78,60 +149,6 @@ def extract_user_profile_v31(query):
+         "raw_query": query
+     }
+ 
+-    states = [
+-        "andhra pradesh",
+-        "arunachal pradesh",
+-        "assam",
+-        "bihar",
+-        "chhattisgarh",
+-        "goa",
+-        "gujarat",
+-        "haryana",
+-        "himachal pradesh",
+-        "jharkhand",
+-        "karnataka",
+-        "kerala",
+-        "madhya pradesh",
+-        "maharashtra",
+-        "manipur",
+-        "meghalaya",
+-        "mizoram",
+-        "nagaland",
+-        "odisha",
+-        "punjab",
+-        "rajasthan",
+-        "sikkim",
+-        "tamil nadu",
+-        "telangana",
+-        "tripura",
+-        "uttar pradesh",
+-        "uttarakhand",
+-        "west bengal",
+-        "delhi",
+-        "jammu and kashmir",
+-        "ladakh"
+-    ]
+-
+-    occupations = [
+-        "farmer",
+-        "farmers",
+-        "student",
+-        "students",
+-        "self employed",
+-        "self-employed",
+-        "salaried",
+-        "worker",
+-        "workers",
+-        "daily wage",
+-        "daily wages",
+-        "artisan",
+-        "entrepreneur",
+-        "fisherman",
+-        "fishermen",
+-        "teacher",
+-        "unemployed"
+-    ]
+-
+     categories = [
+         "agriculture",
+         "education",
+@@ -149,6 +166,7 @@ def extract_user_profile_v31(query):
+         "st",
+         "obc",
+         "ebc",
++        "ews",
+         "general",
+         "minority"
+     ]
+@@ -157,41 +175,14 @@ def extract_user_profile_v31(query):
+     # STATE
+     # ========================================================
+ 
+-    for state in states:
+-
+-        if state in q:
+-
+-            profile["state"] = state
+-            break
++    profile["state"] = find_state_in_text(q)
+ 
+     # ========================================================
+-    # OCCUPATION
++    # OCCUPATION  (canonical: student, farmer, self_employed,
++    #              salaried, daily_wage, unemployed)
+     # ========================================================
+ 
+-    for occupation in occupations:
+-
+-        if occupation in q:
+-
+-            occupation = occupation.replace(
+-                "self-employed",
+-                "self_employed"
+-            )
+-
+-            occupation = occupation.replace(
+-                "daily wages",
+-                "daily_wages"
+-            )
+-
+-            occupation = occupation.replace(
+-                "daily wage",
+-                "daily_wages"
+-            )
+-
+-            if occupation.endswith("s"):
+-                occupation = occupation[:-1]
+-
+-            profile["occupation"] = occupation
+-            break
++    profile["occupation"] = find_occupation_in_text(q) or ""
+ 
+     # ========================================================
+     # CATEGORY
+@@ -242,11 +233,15 @@ def extract_user_profile_v31(query):
+ 
+     age_patterns = [
+ 
+-        r"\b(\d{1,3})\s*[- ]?\s*year[- ]?old\b",
++        # "21 years old", "21 year old", "21-year-old", "21 yrs old"
++        r"\b(\d{1,3})\s*[- ]?\s*(?:years?|yrs?)[- ]?old\b",
+ 
+         r"\bage\s*(?:is|of)?\s*(\d{1,3})\b",
+ 
+-        r"\baged\s*(\d{1,3})\b"
++        r"\baged\s*(\d{1,3})\b",
++
++        # "I am 21" (but not "I am 3 lakh ...")
++        r"\bi am (\d{1,2})\b(?!\s*(?:lakh|lakhs|l|crore|crores|k)\b)"
+     ]
+ 
+     for pattern in age_patterns:
+@@ -464,93 +459,23 @@ def detect_intent(query):
+ # EXACT SCHEME ALIASES
+ # ============================================================
+ 
+-SCHEME_ALIASES = {
+-
+-    "pm kisan":
+-        "pm kisan samman nidhi",
+-
+-    "pm-kisan":
+-        "pm kisan samman nidhi",
+-
+-    "pm kisan samman nidhi":
+-        "pm kisan samman nidhi",
+-
+-    "pm kisan nidhi":
+-        "pm kisan samman nidhi",
+-
+-    "pmkisan":
+-        "pm kisan samman nidhi",
+-
+-    "kisan samman nidhi":
+-        "pm kisan samman nidhi"
+-}
++# Aliases now live in backend/rag/name_match.py (ALIASES).
+ 
+ 
+ # ============================================================
+ # EXACT SCHEME FINDER
++#
++# The longest match wins, so "PM Kisan Maandhan" no longer falls
++# back to the "PM Kisan" alias (PM-KISAN Samman Nidhi).
+ # ============================================================
+ 
+ def find_exact_scheme(query):
+ 
+-    q = normalize_text(
+-        query
+-    )
+-
+-    normalized_names = (
+-        master["scheme_name"]
+-        .fillna("")
+-        .astype(str)
+-        .map(normalize_text)
++    return find_best_scheme_row(
++        query,
++        master
+     )
+ 
+-    # ========================================================
+-    # KNOWN ALIASES
+-    # ========================================================
+-
+-    for alias, official_name in SCHEME_ALIASES.items():
+-
+-        alias_normalized = normalize_text(
+-            alias
+-        )
+-
+-        if alias_normalized not in q:
+-            continue
+-
+-        exact_matches = master[
+-            normalized_names == official_name
+-        ]
+-
+-        if len(exact_matches) > 0:
+-
+-            return exact_matches.iloc[0]
+-
+-        partial_matches = master[
+-            normalized_names.str.contains(
+-                official_name,
+-                regex=False,
+-                na=False
+-            )
+-        ]
+-
+-        if len(partial_matches) > 0:
+-
+-            return partial_matches.iloc[0]
+-
+-    # ========================================================
+-    # DIRECT SCHEME NAME MATCH
+-    # ========================================================
+-
+-    for idx, scheme_name in normalized_names.items():
+-
+-        if not scheme_name:
+-            continue
+-
+-        if scheme_name in q:
+-
+-            return master.loc[idx]
+-
+-    return None
+-
+ 
+ # ============================================================
+ # VALUE MATCHING
+@@ -654,29 +579,24 @@ def determine_eligibility(
+ 
+     if occupations:
+ 
+-        occupation_match = False
++        # Only real occupations (student, farmer, ...) can rule a scheme
++        # out. 'Individual', 'Family', 'Business Entity', ... in the CSV
++        # are beneficiary types and are ignored.
++        statuses = [
++            occupation_status(
++                occupation,
++                row.get("occupation")
++            )
++            for occupation in occupations
++        ]
+ 
+-        for occupation in occupations:
++        if "eligible" in statuses:
+ 
+-            if value_contains(
+-                row_occupation,
+-                [occupation]
+-            ):
++            checks["occupation"] = "eligible"
+ 
+-                occupation_match = True
+-                break
++        elif "unknown" in statuses:
+ 
+-        if (
+-            occupation_match
+-            or not row_occupation
+-            or row_occupation in [
+-                "all",
+-                "any",
+-                "all occupations"
+-            ]
+-        ):
+-
+-            checks["occupation"] = "eligible"
++            checks["occupation"] = "unknown"
+ 
+         else:
+ 
+@@ -910,7 +830,7 @@ def check_additional_requirements_v32(
+ 
+         if social_category:
+ 
+-            if social_category in row_social:
++            if social_category in row_social.split():
+ 
+                 checks[
+                     "social_category"
+@@ -1150,8 +1070,10 @@ def get_candidates(
+ 
+         occupation_match = (
+             not occupation
+-            or not row_occupation
+-            or occupation in row_occupation
++            or occupation_status(
++                occupation,
++                row.get("occupation")
++            ) != "not_eligible"
+         )
+ 
+         category_match = (
+@@ -1462,11 +1384,16 @@ def rank_candidates(
+ 
+         if occupation:
+ 
+-            if occupation in row_occupation:
++            occupation_state = occupation_status(
++                occupation,
++                row.get("occupation")
++            )
++
++            if occupation_state == "eligible":
+ 
+                 score += 60
+ 
+-            elif not row_occupation:
++            elif occupation_state == "unknown":
+ 
+                 score += 15
+ 
+@@ -1858,19 +1785,111 @@ FIELD_MAP = {
+ }
+ 
+ 
++# ============================================================
++# STRUCTURED PROFILE (from the profile form)
++#
++# The API used to turn the form into a sentence ("I am 21 years
++# old, from ...") and then re-parse that sentence with regexes,
++# which silently lost fields. The form values are now used
++# directly; anything the user states in the question itself
++# (e.g. "I am a farmer from Kerala") overrides them.
++# ============================================================
++
++def profile_from_form(form):
++
++    form = form or {}
++
++    gender = normalize_text(
++        form.get("gender")
++    )
++
++    if gender not in ("male", "female"):
++        gender = None
++
++    def to_number(value):
++
++        try:
++            return int(float(value))
++
++        except (TypeError, ValueError):
++            return None
++
++    state = normalize_text(
++        form.get("state")
++    )
++
++    state = STATE_ALIASES.get(
++        state,
++        state
++    )
++
++    return {
++        "state": state,
++        "occupation": canonical_user_occupation(
++            form.get("occupation")
++        ) or "",
++        "category": "",
++        "gender": gender,
++        "age": to_number(
++            form.get("age")
++        ),
++        "income": to_number(
++            form.get("income")
++        ),
++        "social_category": normalize_text(
++            form.get("social_category")
++        ),
++        "disability": None,
++        "bpl": None,
++        "raw_query": ""
++    }
++
++
++def merge_profiles(form_profile, text_profile):
++
++    merged = dict(form_profile)
++
++    for key, value in text_profile.items():
++
++        if key == "raw_query":
++            continue
++
++        if value in (None, ""):
++            continue
++
++        merged[key] = value
++
++    merged["raw_query"] = text_profile.get(
++        "raw_query",
++        ""
++    )
++
++    return merged
++
++
+ # ============================================================
+ # MAIN QUERY ENGINE
+ # ============================================================
+ 
+ def yojana_query_v32(
+     query,
+-    top_k=5
++    top_k=5,
++    profile_override=None
+ ):
+ 
+     profile = extract_user_profile_v31(
+         query
+     )
+ 
++    if profile_override:
++
++        profile = merge_profiles(
++            profile_from_form(
++                profile_override
++            ),
++            profile
++        )
++
+     intent = detect_intent(
+         query
+     )
+diff --git a/tests/test_retrieval_fixes.py b/tests/test_retrieval_fixes.py
+new file mode 100644
+index 0000000..0d6b0aa
+--- /dev/null
++++ b/tests/test_retrieval_fixes.py
+@@ -0,0 +1,402 @@
++"""Regression tests for the retrieval / rule-engine fixes.
++
++Run from the repo root:
++
++    python -m pytest tests/test_retrieval_fixes.py -q
++    # or, without pytest:
++    python tests/test_retrieval_fixes.py
++
++No ChromaDB, torch or network access is needed: the Chroma collection is
++replaced by a small fake so the filtering logic can be tested on its own.
++"""
++
++import sys
++import types
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[1]
++
++if str(ROOT) not in sys.path:
++    sys.path.insert(0, str(ROOT))
++
++
++BASE_PROFILE = {
++    "age": 21,
++    "state": "Telangana",
++    "income": 300000,
++    "gender": "Male",
++    "social_category": "General",
++}
++
++FRONTEND_OCCUPATIONS = [
++    "Student", "Farmer", "Self Employed", "Government Employee",
++    "Private Employee", "Business", "Unemployed", "Homemaker",
++    "Retired", "Other",
++]
++
++
++# ----------------------------------------------------------------------
++# vocabulary
++# ----------------------------------------------------------------------
++
++def test_frontend_occupations_map_to_csv_vocabulary():
++    from backend.rag.vocab import canonical_user_occupation as c
++
++    assert c("Student") == "student"
++    assert c("Farmer") == "farmer"
++    assert c("Self Employed") == "self_employed"
++    assert c("Government Employee") == "salaried"
++    assert c("Private Employee") == "salaried"
++    assert c("Business") == "self_employed"
++    assert c("Unemployed") == "unemployed"
++
++    # no equivalent in the CSV -> must never exclude anything
++    for label in ("Homemaker", "Retired", "Other", "", None):
++        assert c(label) is None
++
++
++def test_beneficiary_types_are_not_occupations():
++    from backend.rag.vocab import occupation_status as status
++
++    for cell in ("Individual", "Family", "Business Entity", "NGO",
++                 "Individual, Family", "Registered Societies", None):
++        assert status("Student", cell) == "unknown", cell
++
++    assert status("Student", "student;daily_wage") == "eligible"
++    assert status("Self Employed", "self_employed") == "eligible"
++    assert status("Farmer", "student") == "not_eligible"
++
++
++# ----------------------------------------------------------------------
++# eligibility filter (the step in front of Chroma)
++# ----------------------------------------------------------------------
++
++def test_every_frontend_occupation_keeps_a_reasonable_candidate_pool():
++    from backend.rag import eligibility
++
++    # Before the fix 6 of these 10 occupations left only 11 of 4,705
++    # schemes, because almost every row was judged "not eligible".
++    for occupation in FRONTEND_OCCUPATIONS:
++
++        candidates = eligibility.get_candidate_schemes(
++            dict(BASE_PROFILE, occupation=occupation)
++        )
++
++        assert len(candidates) > 200, (occupation, len(candidates))
++
++
++def test_individual_schemes_survive_for_students():
++    from backend.rag import eligibility
++
++    ids = {
++        c["scheme_name"]
++        for c in eligibility.get_candidate_schemes(
++            dict(BASE_PROFILE, occupation="Student")
++        )
++    }
++
++    # occupation column says "Individual" for this scheme
++    assert "Aam Aadmi Bima Yojana" in ids
++
++
++def test_real_mismatches_are_still_excluded():
++    from backend.rag import eligibility
++
++    # a female-only scheme must not reach a male user
++    result = eligibility.check_scheme(
++        dict(BASE_PROFILE, occupation="Student"),
++        {"gender": "female", "state": "All India"}
++    )
++    assert result["checks"]["gender"] == "not_eligible"
++
++    # a state-specific scheme must not reach another state
++    result = eligibility.check_scheme(
++        dict(BASE_PROFILE, occupation="Student"),
++        {"state": "Kerala"}
++    )
++    assert result["status"] == "not_eligible"
++
++    # "Other" gender cannot be confirmed, but is not ruled out
++    result = eligibility.check_scheme(
++        dict(BASE_PROFILE, gender="Other"),
++        {"gender": "female"}
++    )
++    assert result["checks"]["gender"] == "unknown"
++
++
++# ----------------------------------------------------------------------
++# scheme-name matching
++# ----------------------------------------------------------------------
++
++def test_named_scheme_matching():
++    from backend.rag.name_match import find_scheme_matches
++
++    def best(text):
++        matches = find_scheme_matches(text)
++        return matches[0]["scheme_name"] if matches else None
++
++    assert best("Tell me about PM-KISAN") == "PM-KISAN Samman Nidhi"
++    assert best("Tell me about PMAY-G") == "Pradhan Mantri Awas Yojana - Gramin"
++
++    # used to return PM-KISAN Samman Nidhi (alias was a substring check)
++    assert best("Tell me about PM Kisan Maandhan") == \
++        "Pradhan Mantri Kisan Maandhan Yojana"
++    assert best("benefits of PM Kisan Maan-Dhan Yojana") == \
++        "Pradhan Mantri Kisan Maandhan Yojana"
++
++    # longest name wins
++    assert best("documents for Kisan Credit Card (Pashupalan)") == \
++        "Kisan Credit Card (Pashupalan)"
++    assert best("documents for Kisan Credit Card") == "Kisan Credit Card"
++
++    # general questions must not match a scheme
++    for text in ("What is the best scheme for farmers?",
++                 "schemes for women in Karnataka",
++                 "scholarships for students"):
++        assert best(text) is None, text
++
++
++def test_did_you_mean_suggestions():
++    from backend.rag.name_match import suggest_similar
++
++    assert "Rythu Bima Scheme" in suggest_similar("Rythu Bandhu")
++
++
++# ----------------------------------------------------------------------
++# YojanaLM rule engine
++# ----------------------------------------------------------------------
++
++def test_profile_extraction_from_free_text():
++    from backend.yojanaLM.retrieval.engine import extract_user_profile_v31 as ex
++
++    # "years old" used to be missed ('year' + 's' broke the regex)
++    assert ex("I am 21 years old")["age"] == 21
++    assert ex("I am 21-year-old")["age"] == 21
++    assert ex("aged 45")["age"] == 45
++
++    # income formats
++    assert ex("my income is 3.5 lakh")["income"] == 350000
++    assert ex("annual income of 300000.0")["income"] == 300000
++    assert ex("income Rs 3,00,000")["income"] == 300000
++
++    # states the old hard-coded list did not know, and word boundaries
++    assert ex("I live in Puducherry")["state"] == "puducherry"
++    assert ex("schemes in Chandigarh")["state"] == "chandigarh"
++    assert ex("what is my goal")["state"] == ""          # 'goa' in 'goal'
++    assert ex("a farmer from Orissa")["state"] == "odisha"
++
++    # occupations are canonical CSV values
++    assert ex("I am a self-employed trader")["occupation"] == "self_employed"
++    assert ex("I work as a daily wage labourer")["occupation"] == "daily_wage"
++    assert ex("I am a student")["occupation"] == "student"
++
++
++def test_form_profile_is_used_directly():
++    from backend.yojanaLM.retrieval.engine import (
++        extract_user_profile_v31, merge_profiles, profile_from_form
++    )
++
++    form = {
++        "age": 21, "state": "Telangana", "occupation": "Government Employee",
++        "income": 300000.0, "gender": "Male", "social_category": "General",
++    }
++
++    profile = profile_from_form(form)
++
++    assert profile["age"] == 21
++    assert profile["income"] == 300000
++    assert profile["state"] == "telangana"
++    assert profile["occupation"] == "salaried"
++    assert profile["gender"] == "male"
++    assert profile["social_category"] == "general"
++
++    # something said in the question overrides the form
++    merged = merge_profiles(
++        profile,
++        extract_user_profile_v31("I am a farmer from Kerala")
++    )
++    assert merged["occupation"] == "farmer"
++    assert merged["state"] == "kerala"
++    assert merged["age"] == 21            # not mentioned -> kept from form
++
++
++def test_engine_answers_for_every_frontend_occupation():
++    from backend.yojanaLM.retrieval.engine import yojana_query_v32
++
++    for occupation in FRONTEND_OCCUPATIONS:
++
++        form = dict(BASE_PROFILE, occupation=occupation)
++
++        result = yojana_query_v32(
++            "What schemes can I apply for?",
++            top_k=5,
++            profile_override=form
++        )
++
++        assert result["retrieval_type"] == "attribute_filtered_search"
++        assert len(result["results"]) > 0, occupation
++
++
++def test_answers_for_named_and_generic_questions():
++    from backend.yojanaLM.retrieval.answer import yojana_answer
++
++    form = dict(BASE_PROFILE, occupation="Farmer")
++
++    answer = yojana_answer(
++        "Tell me about PM Kisan Maandhan",
++        profile=form
++    )["answer"]
++    assert "Maandhan" in answer.split("\n")[0]
++
++    # general question -> a search, not "I couldn't find an exact match"
++    answer = yojana_answer(
++        "What is the best scheme for farmers?",
++        profile=form
++    )["answer"]
++    assert "exact match" not in answer
++    assert answer.startswith("I found")
++
++    # unknown scheme name -> honest "not found" plus suggestions
++    answer = yojana_answer("Tell me about Rythu Bandhu", profile=form)["answer"]
++    assert "exact match" in answer
++    assert "Rythu Bima Scheme" in answer
++
++
++# ----------------------------------------------------------------------
++# Chroma retrieval logic (fake collection, no chromadb needed)
++# ----------------------------------------------------------------------
++
++class FakeCollection:
++    """Mimics the parts of a Chroma collection that we use."""
++
++    def __init__(self, n=1000):
++        self.ids = [f"id{i}" for i in range(n)]
++        self.query_sizes = []
++
++    def count(self):
++        return len(self.ids)
++
++    def query(self, query_embeddings, n_results, include=None, where=None):
++
++        assert where is None, "must not send a giant $in filter to Chroma"
++
++        self.query_sizes.append(n_results)
++
++        ids = self.ids[:n_results]          # id0 is the nearest neighbour
++
++        return {
++            "ids": [ids],
++            "documents": [[f"doc {i}" for i in ids]],
++            "metadatas": [[{"scheme_name": f"name {i}"} for i in ids]],
++            "distances": [[float(k) for k in range(len(ids))]],
++        }
++
++    def get(self, ids, include=None):
++        return {
++            "ids": list(ids),
++            "documents": [f"doc {i}" for i in ids],
++            "metadatas": [{"scheme_name": f"name {i}"} for i in ids],
++        }
++
++
++def _load_personalized_retrieval(fake, candidate_ids, named_ids):
++
++    chromadb = types.ModuleType("chromadb")
++    chromadb.PersistentClient = lambda path: types.SimpleNamespace(
++        get_collection=lambda name: fake
++    )
++
++    embeddings = types.ModuleType("backend.rag.embeddings")
++    embeddings.create_embeddings = lambda texts: [[0.0] * 4 for _ in texts]
++
++    sys.modules["chromadb"] = chromadb
++    sys.modules["backend.rag.embeddings"] = embeddings
++    sys.modules.pop("backend.rag.personalized_retrieval", None)
++
++    import importlib
++    module = importlib.import_module("backend.rag.personalized_retrieval")
++
++    module.get_candidate_schemes = lambda profile: [
++        {"scheme_id": i} for i in candidate_ids
++    ]
++    module.find_named_scheme_ids = lambda query, limit=2: list(named_ids)
++
++    return module
++
++
++def test_retrieval_filters_after_vector_search():
++
++    fake = FakeCollection(1000)
++
++    # only every 10th scheme is allowed for this profile
++    allowed = [f"id{i}" for i in range(0, 1000, 10)]
++
++    module = _load_personalized_retrieval(fake, allowed, [])
++
++    out = module.personalized_search({}, "any question", top_k=5)
++
++    assert out["ids"][0] == ["id0", "id10", "id20", "id30", "id40"]
++    assert len(out["documents"][0]) == 5
++    assert fake.query_sizes == [300]          # one pass was enough
++
++
++def test_retrieval_widens_when_profile_is_narrow():
++
++    fake = FakeCollection(1000)
++
++    # allowed ids all sit far from the query
++    allowed = [f"id{i}" for i in (800, 810, 820, 830, 840, 850)]
++
++    module = _load_personalized_retrieval(fake, allowed, [])
++
++    out = module.personalized_search({}, "any question", top_k=3)
++
++    assert out["ids"][0] == ["id800", "id810", "id820"]
++    assert fake.query_sizes == [300, 1000]    # widened to the full set
++
++
++def test_named_scheme_is_pinned_even_if_profile_excludes_it():
++
++    fake = FakeCollection(1000)
++
++    allowed = [f"id{i}" for i in range(0, 1000, 10)]
++
++    module = _load_personalized_retrieval(fake, allowed, ["id777"])
++
++    out = module.personalized_search({}, "tell me about X", top_k=3)
++
++    assert out["ids"][0][0] == "id777"
++    assert out["distances"][0][0] == 0.0
++    assert out["ids"][0][1:] == ["id0", "id10"]
++    assert len(out["ids"][0]) == 3
++
++
++def test_empty_candidates_returns_empty_structure():
++
++    fake = FakeCollection(10)
++
++    module = _load_personalized_retrieval(fake, [], [])
++
++    out = module.personalized_search({}, "q", top_k=3)
++
++    assert out["documents"] == [[]]
++    assert out["metadatas"] == [[]]
++
++
++if __name__ == "__main__":
++
++    failures = 0
++
++    for name, fn in sorted(globals().items()):
++
++        if name.startswith("test_") and callable(fn):
++
++            try:
++                fn()
++                print("PASS", name)
++
++            except Exception as exc:
++                failures += 1
++                print("FAIL", name, "->", repr(exc))
++
++    sys.exit(1 if failures else 0)
